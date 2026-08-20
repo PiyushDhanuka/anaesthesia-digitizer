@@ -372,8 +372,14 @@ def generate_report_html(case_id: str) -> str:
             <tr>
                 <td class="meta-label">Case ID:</td>
                 <td class="meta-val"><strong>{case_info.get('case_id')}</strong></td>
-                <td class="meta-label">Total Readings:</td>
-                <td class="meta-val"><strong>{len(readings)} cycles</strong></td>
+                <td class="meta-label">Patient ID:</td>
+                <td class="meta-val"><strong>{case_info.get('patient_id') or 'Not specified'}</strong></td>
+            </tr>
+            <tr>
+                <td class="meta-label">Anesthetist:</td>
+                <td class="meta-val">{case_info.get('anesthetist_id') or 'Not specified'}</td>
+                <td class="meta-label">OR Room:</td>
+                <td class="meta-val">{case_info.get('or_room') or 'Not specified'}</td>
             </tr>
             <tr>
                 <td class="meta-label">Start Time:</td>
@@ -384,8 +390,8 @@ def generate_report_html(case_id: str) -> str:
             <tr>
                 <td class="meta-label">Duration:</td>
                 <td class="meta-val">{duration_str}</td>
-                <td class="meta-label"></td>
-                <td class="meta-val"></td>
+                <td class="meta-label">Total Readings:</td>
+                <td class="meta-val"><strong>{len(readings)} cycles</strong></td>
             </tr>
         </table>
         <div style="margin-top: 8px; color: #64748b; font-size: 10px;">Data Source: Camera-based monitor digitization | Validation: Physiological range checks | Storage: Local processing</div>
@@ -438,11 +444,14 @@ def generate_report_html(case_id: str) -> str:
     return html_content
 
 
-def _generate_pdf_reportlab(case_id: str) -> bytes:
-    """ReportLab fallback generator to guarantee a valid downloadable PDF."""
+def generate_report_pdf(case_id: str) -> bytes:
+    """
+    Generates a standalone clinical PDF report using ReportLab.
+    Includes case metadata, statistical summary, embedded trend chart image, and readings log.
+    """
     from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
     buffer = io.BytesIO()
@@ -484,10 +493,21 @@ def _generate_pdf_reportlab(case_id: str) -> bytes:
     case_info = get_case(case_id) or {"case_id": case_id, "started_at": "--", "ended_at": "--", "status": "unknown"}
     readings = get_case_readings(case_id)
 
+    is_completed = case_info.get("status") == "ended"
+    started_at_str = _format_timestamp(case_info.get("started_at"))
+    ended_at_str = _format_timestamp(case_info.get("ended_at")) if is_completed else "In Progress"
+    duration_str = _format_duration(case_info.get("started_at"), case_info.get("ended_at")) if is_completed else "In Progress"
+    status_str = "COMPLETED" if is_completed else "ACTIVE"
+
+    patient_id_str = case_info.get("patient_id") or "Not specified"
+    anesthetist_str = case_info.get("anesthetist_id") or "Not specified"
+    or_room_str = case_info.get("or_room") or "Not specified"
+
     meta_data = [
-        [Paragraph(f"<b>Case ID:</b> {case_info.get('case_id')}", styles['Normal']), Paragraph(f"<b>Status:</b> {case_info.get('status', '').upper()}", styles['Normal'])],
-        [Paragraph(f"<b>Start Time:</b> {case_info.get('started_at', '--')}", styles['Normal']), Paragraph(f"<b>End Time:</b> {case_info.get('ended_at', '--')}", styles['Normal'])],
-        [Paragraph(f"<b>Total Readings:</b> {len(readings)} cycles", styles['Normal']), Paragraph("", styles['Normal'])]
+        [Paragraph(f"<b>Case ID:</b> {case_info.get('case_id')}", styles['Normal']), Paragraph(f"<b>Patient ID:</b> {patient_id_str}", styles['Normal'])],
+        [Paragraph(f"<b>Anesthetist:</b> {anesthetist_str}", styles['Normal']), Paragraph(f"<b>OR Room:</b> {or_room_str}", styles['Normal'])],
+        [Paragraph(f"<b>Start Time:</b> {started_at_str}", styles['Normal']), Paragraph(f"<b>End Time:</b> {ended_at_str}", styles['Normal'])],
+        [Paragraph(f"<b>Duration:</b> {duration_str}", styles['Normal']), Paragraph(f"<b>Total Readings:</b> {len(readings)} cycles", styles['Normal'])]
     ]
     meta_table = Table(meta_data, colWidths=[270, 270])
     meta_table.setStyle(TableStyle([
@@ -511,8 +531,7 @@ def _generate_pdf_reportlab(case_id: str) -> bytes:
     sbp_s = _calc_stats(sbps)
     dbp_s = _calc_stats(dbps)
     etco2_s = _calc_stats(etco2s)
-    abnormal_events = [(r, _abnormal_parameters(r)) for r in readings]
-    abnormal_events = [(r, alerts) for r, alerts in abnormal_events if alerts]
+    abnormal_events = [(r, _abnormal_parameters(r)) for r in readings if _abnormal_parameters(r)]
 
     def s_str(s, unit=""):
         return f"Min: {s['min']}{unit} | Max: {s['max']}{unit} | Avg: {s['avg']}{unit}" if s['min'] is not None else "--"
@@ -534,7 +553,7 @@ def _generate_pdf_reportlab(case_id: str) -> bytes:
         ('PADDING', (0, 0), (-1, -1), 5),
     ]))
     story.append(sum_table)
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 8))
 
     alert_summary_style = ParagraphStyle(
         'AlertSummary',
@@ -551,12 +570,26 @@ def _generate_pdf_reportlab(case_id: str) -> bytes:
     event_count = len(abnormal_events)
     story.append(Paragraph(f"<b>ALERT:</b> {event_count} abnormal reading{'s' if event_count != 1 else ''} detected.", alert_summary_style))
 
+    # Embed Vital Signs Trend Chart Image into ReportLab PDF
+    trend_chart_uri = _generate_trend_chart_data_uri(readings)
+    if trend_chart_uri:
+        try:
+            header, encoded = trend_chart_uri.split(",", 1)
+            img_data = base64.b64decode(encoded)
+            img_buffer = io.BytesIO(img_data)
+            trend_img = RLImage(img_buffer, width=540, height=195)
+            story.append(Paragraph("Vital Signs Trend Chart", section_style))
+            story.append(trend_img)
+            story.append(Spacer(1, 12))
+        except Exception as img_err:
+            print(f"[REPORT WARNING] Could not embed trend chart image in ReportLab PDF: {img_err}")
+
     story.append(Paragraph("Detailed Time-Series Vitals Log", section_style))
 
     table_data = [["#", "Timestamp", "Heart Rate", "SpO2", "Blood Pressure", "EtCO2", "Alert"]]
     abnormal_row_indexes = []
     for idx, r in enumerate(readings, 1):
-        ts = r.get("timestamp", "--")[:19].replace("T", " ")
+        ts = _format_timestamp(r.get("timestamp"))
         hr = f"{int(round(r['heart_rate']))}" if r.get("heart_rate") is not None else "--"
         spo2 = f"{int(round(r['spo2']))}%" if r.get("spo2") is not None else "--"
         bp = f"{int(round(r['bp_systolic']))}/{int(round(r['bp_diastolic']))}" if r.get("bp_systolic") is not None and r.get("bp_diastolic") is not None else "--"
@@ -589,16 +622,3 @@ def _generate_pdf_reportlab(case_id: str) -> bytes:
 
     doc.build(story)
     return buffer.getvalue()
-
-
-def generate_report_pdf(case_id: str) -> bytes:
-    """
-    Generates PDF bytes for case_id using WeasyPrint if available,
-    falling back to ReportLab.
-    """
-    try:
-        from weasyprint import HTML
-        html_str = generate_report_html(case_id)
-        return HTML(string=html_str).write_pdf()
-    except Exception as e:
-        return _generate_pdf_reportlab(case_id)

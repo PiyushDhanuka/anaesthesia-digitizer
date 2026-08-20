@@ -20,7 +20,7 @@ def get_db_connection():
 
 
 def init_db():
-    """Creates the SQLite database file and tables on first run."""
+    """Creates the SQLite database file and tables on first run, applying column migrations."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -28,9 +28,19 @@ def init_db():
                 case_id TEXT PRIMARY KEY,
                 started_at TEXT NOT NULL,
                 ended_at TEXT,
-                status TEXT NOT NULL
+                status TEXT NOT NULL,
+                patient_id TEXT,
+                anesthetist_id TEXT,
+                or_room TEXT
             );
         """)
+        # Fallback migration check for existing monitoring.db files
+        cursor.execute("PRAGMA table_info(cases);")
+        existing_cols = {row["name"] for row in cursor.fetchall()}
+        for col_name in ["patient_id", "anesthetist_id", "or_room"]:
+            if col_name not in existing_cols:
+                cursor.execute(f"ALTER TABLE cases ADD COLUMN {col_name} TEXT;")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS readings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,18 +54,31 @@ def init_db():
                 FOREIGN KEY (case_id) REFERENCES cases(case_id)
             );
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ground_truth (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                case_id TEXT,
+                field TEXT NOT NULL,
+                value REAL NOT NULL,
+                timestamp TEXT NOT NULL
+            );
+        """)
         conn.commit()
 
 
-def create_case() -> str:
-    """Creates a new case record with status 'active' and returns the new case_id."""
+def create_case(
+    patient_id: Optional[str] = None,
+    anesthetist_id: Optional[str] = None,
+    or_room: Optional[str] = None
+) -> str:
+    """Creates a new case record with status 'active' and optional metadata."""
     now_iso = datetime.now(timezone.utc).isoformat()
-    case_id = f"case_{int(time.time())}"
+    case_id = f"case_{int(time.time() * 1000)}"
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO cases (case_id, started_at, ended_at, status) VALUES (?, ?, ?, ?)",
-            (case_id, now_iso, None, "active")
+            "INSERT INTO cases (case_id, started_at, ended_at, status, patient_id, anesthetist_id, or_room) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (case_id, now_iso, None, "active", patient_id, anesthetist_id, or_room)
         )
         conn.commit()
     return case_id
@@ -135,8 +158,38 @@ def get_case(case_id: str) -> Optional[Dict[str, Any]]:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT case_id, started_at, ended_at, status FROM cases WHERE case_id = ?",
+            "SELECT case_id, started_at, ended_at, status, patient_id, anesthetist_id, or_room FROM cases WHERE case_id = ?",
             (case_id,)
         )
         row = cursor.fetchone()
         return dict(row) if row else None
+
+
+def save_ground_truth_db(field: str, value: Any, timestamp: str, case_id: Optional[str] = None):
+    """Saves a ground truth entry in SQLite database."""
+    init_db()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO ground_truth (case_id, field, value, timestamp) VALUES (?, ?, ?, ?)",
+            (case_id, field, float(value) if value is not None else 0.0, timestamp)
+        )
+        conn.commit()
+
+
+def get_ground_truth_db(case_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Returns all ground truth entries from SQLite database."""
+    init_db()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if case_id:
+            cursor.execute("SELECT field, value, timestamp FROM ground_truth WHERE case_id = ? ORDER BY timestamp ASC", (case_id,))
+        else:
+            cursor.execute("SELECT field, value, timestamp FROM ground_truth ORDER BY timestamp ASC")
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+# Initialize database schema on module load
+init_db()
+

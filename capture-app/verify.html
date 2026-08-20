@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OCR Accuracy & Verification Report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="container">
+    <header class="app-header">
+      <div>
+        <h1>
+          <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-spo2)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          OCR Accuracy & Verification
+        </h1>
+        <div id="last-updated" class="subtitle">Case ID: <span id="case-id" style="font-family: var(--font-mono); color: var(--accent-spo2);">Loading...</span></div>
+      </div>
+      <div class="header-actions" style="display: flex; align-items: center; gap: 12px;">
+        <label class="auto-refresh" style="font-size: 0.8rem; color: var(--text-muted); cursor: pointer;">
+          <input type="checkbox" id="chk-auto-refresh" checked> Auto-refresh (2s)
+        </label>
+        <button class="btn btn-secondary btn-sm" id="btn-refresh">Refresh Now</button>
+        <a href="dashboard.html" class="btn btn-secondary btn-sm">Dashboard</a>
+      </div>
+    </header>
+
+    <!-- Top Level Metric Cards -->
+    <div class="metrics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem; margin-top: 1rem;">
+      <div class="metric-card">
+        <div class="metric-title">Total Evaluated</div>
+        <div class="metric-value" id="val-total">0</div>
+        <div class="metric-sub text-muted">Matched 5s window pairs</div>
+      </div>
+      <div class="metric-card exact">
+        <div class="metric-title">Exact Matches</div>
+        <div class="metric-value" id="val-exact">0%</div>
+        <div class="metric-sub text-muted" id="val-exact-cnt">0 readings</div>
+      </div>
+      <div class="metric-card close">
+        <div class="metric-title">Close Matches</div>
+        <div class="metric-value" id="val-close">0%</div>
+        <div class="metric-sub text-muted" id="val-close-cnt">Within tolerance</div>
+      </div>
+      <div class="metric-card mismatch">
+        <div class="metric-title">Mismatches</div>
+        <div class="metric-value" id="val-mismatch">0%</div>
+        <div class="metric-sub text-muted" id="val-mismatch-cnt">0 failures</div>
+      </div>
+    </div>
+
+    <!-- Section 1: Per-Field Summary Table -->
+    <section class="section-card" style="margin-top: 1.25rem;">
+      <div class="section-title">
+        <h2 style="font-size: 0.95rem; font-weight: 600;">Per-Field Accuracy Summary</h2>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Vital Sign Field</th>
+            <th>Total Comparisons</th>
+            <th>Exact Match %</th>
+            <th>Close Match %</th>
+            <th>Mismatch %</th>
+          </tr>
+        </thead>
+        <tbody id="field-summary-body">
+          <tr><td colspan="5" style="text-align:center;">Loading verification data...</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Section 2: Detailed Mismatches Table -->
+    <section class="section-card" style="margin-top: 1.25rem;">
+      <div class="section-title">
+        <h2 style="font-size: 0.95rem; font-weight: 600;">Detailed Mismatches Log</h2>
+      </div>
+      <div id="mismatches-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Field</th>
+              <th>OCR Extracted</th>
+              <th>Ground Truth (True)</th>
+              <th>Difference</th>
+              <th>Time Offset</th>
+            </tr>
+          </thead>
+          <tbody id="mismatches-body">
+            <tr><td colspan="6" style="text-align:center;">Loading mismatches...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    let autoRefreshInterval = null;
+
+    async function fetchVerificationReport() {
+      try {
+        const resp = await fetch(`${API_BASE}/debug/verification-report`);
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+        renderReport(data);
+      } catch (err) {
+        console.error('Failed fetching verification report:', err);
+      }
+    }
+
+    function renderReport(data) {
+      document.getElementById('case-id').textContent = data.case_id || 'N/A';
+      document.getElementById('val-total').textContent = data.total_comparisons || 0;
+      
+      document.getElementById('val-exact').textContent = `${data.exact_match_pct || 0}%`;
+      document.getElementById('val-exact-cnt').textContent = `${data.exact_match_count || 0} readings`;
+
+      document.getElementById('val-close').textContent = `${data.close_match_pct || 0}%`;
+      document.getElementById('val-close-cnt').textContent = `${data.close_match_count || 0} within tolerance`;
+
+      document.getElementById('val-mismatch').textContent = `${data.mismatch_pct || 0}%`;
+      document.getElementById('val-mismatch-cnt').textContent = `${data.mismatch_count || 0} mismatches`;
+
+      // Render Field Summary Table
+      const fieldBody = document.getElementById('field-summary-body');
+      fieldBody.innerHTML = '';
+
+      const fields = ['heart_rate', 'spo2', 'bp_systolic', 'bp_diastolic', 'etco2'];
+      const byField = data.by_field || {};
+
+      fields.forEach(field => {
+        const stats = byField[field] || { total: 0, exact_match_pct: 0, close_match_pct: 0, mismatch_pct: 0 };
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="field-name" style="font-family: var(--font-mono); color: var(--accent-spo2); font-weight: 600;">${field}</td>
+          <td style="font-family: var(--font-mono);">${stats.total}</td>
+          <td><span class="btn btn-sm btn-success" style="font-size: 0.7rem; padding: 2px 6px;">${stats.exact_match_pct}%</span> (${stats.exact_matches || 0})</td>
+          <td><span class="btn btn-sm btn-secondary" style="font-size: 0.7rem; padding: 2px 6px;">${stats.close_match_pct}%</span> (${stats.close_matches || 0})</td>
+          <td><span class="btn btn-sm ${stats.mismatches > 0 ? 'btn-danger' : 'btn-success'}" style="font-size: 0.7rem; padding: 2px 6px;">${stats.mismatch_pct}%</span> (${stats.mismatches || 0})</td>
+        `;
+        fieldBody.appendChild(tr);
+      });
+
+      // Render Detailed Mismatches Table
+      const mismatchesBody = document.getElementById('mismatches-body');
+      const mismatches = data.mismatches || [];
+
+      if (mismatches.length === 0) {
+        document.getElementById('mismatches-container').innerHTML = `
+          <div style="text-align: center; padding: 24px; color: var(--accent-hr); font-weight: 600; background: rgba(52, 211, 153, 0.08); border-radius: 4px; border: 1px dashed var(--accent-hr);">
+            Perfect Accuracy: Zero mismatches recorded for the current session.
+          </div>
+        `;
+      } else {
+        mismatchesBody.innerHTML = '';
+        mismatches.forEach(m => {
+          const tr = document.createElement('tr');
+          tr.className = 'mismatch-row';
+          const tsFormatted = m.ocr_timestamp ? m.ocr_timestamp.split('T')[1].split('.')[0] : 'N/A';
+          tr.innerHTML = `
+            <td style="font-family: var(--font-mono);">${tsFormatted}</td>
+            <td class="field-name" style="font-family: var(--font-mono); color: var(--accent-spo2);">${m.field}</td>
+            <td style="color: var(--status-critical); font-family: var(--font-mono); font-weight: 600;">${m.ocr_value}</td>
+            <td style="color: var(--accent-hr); font-family: var(--font-mono); font-weight: 600;">${m.ground_truth_value}</td>
+            <td style="font-family: var(--font-mono);"><strong>${m.difference}</strong></td>
+            <td style="font-family: var(--font-mono);">${m.time_diff_seconds}s</td>
+          `;
+          mismatchesBody.appendChild(tr);
+        });
+      }
+    }
+
+    document.getElementById('btn-refresh').addEventListener('click', fetchVerificationReport);
+
+    const chkAuto = document.getElementById('chk-auto-refresh');
+    function updateAutoRefresh() {
+      if (chkAuto.checked) {
+        if (!autoRefreshInterval) {
+          autoRefreshInterval = setInterval(fetchVerificationReport, 2000);
+        }
+      } else {
+        if (autoRefreshInterval) {
+          clearInterval(autoRefreshInterval);
+          autoRefreshInterval = null;
+        }
+      }
+    }
+
+    chkAuto.addEventListener('change', updateAutoRefresh);
+
+    // Initial load
+    fetchVerificationReport();
+    updateAutoRefresh();
+  </script>
+</body>
+</html>

@@ -3,7 +3,4 @@ uvicorn
 python-multipart
 pillow
 python-dotenv
-openai
-weasyprint
 reportlab
-google-genai

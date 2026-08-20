@@ -261,8 +261,19 @@
     </div>
   </header>
 
-  <!-- 2x2 Monitor Grid -->
-  <main class="monitor-grid">
+  <!-- 2x2 Monitor Grid with Corner ArUco Anchor Markers -->
+  <main class="monitor-grid" style="position: relative;">
+    <!-- ArUco Marker ID 0 (Top-Left Anchor) -->
+    <svg width="42" height="42" viewBox="0 0 6 6" style="position: absolute; top: 18px; left: 18px; z-index: 100; background: #ffffff; padding: 3px; border-radius: 3px; box-shadow: 0 0 6px rgba(0,0,0,0.8);"><rect width="6" height="6" fill="#000000"/><rect x="1" y="1" width="1" height="1" fill="#ffffff"/><rect x="3" y="1" width="1" height="1" fill="#ffffff"/><rect x="4" y="2" width="1" height="1" fill="#ffffff"/><rect x="1" y="3" width="1" height="1" fill="#ffffff"/><rect x="2" y="3" width="1" height="1" fill="#ffffff"/><rect x="4" y="3" width="1" height="1" fill="#ffffff"/><rect x="1" y="4" width="1" height="1" fill="#ffffff"/><rect x="3" y="4" width="1" height="1" fill="#ffffff"/></svg>
+    
+    <!-- ArUco Marker ID 1 (Top-Right Anchor) -->
+    <svg width="42" height="42" viewBox="0 0 6 6" style="position: absolute; top: 18px; right: 18px; z-index: 100; background: #ffffff; padding: 3px; border-radius: 3px; box-shadow: 0 0 6px rgba(0,0,0,0.8);"><rect width="6" height="6" fill="#000000"/><rect x="1" y="1" width="1" height="1" fill="#ffffff"/><rect x="3" y="1" width="1" height="1" fill="#ffffff"/><rect x="4" y="1" width="1" height="1" fill="#ffffff"/><rect x="2" y="2" width="1" height="1" fill="#ffffff"/><rect x="4" y="2" width="1" height="1" fill="#ffffff"/><rect x="1" y="3" width="1" height="1" fill="#ffffff"/><rect x="2" y="3" width="1" height="1" fill="#ffffff"/><rect x="3" y="3" width="1" height="1" fill="#ffffff"/><rect x="2" y="4" width="1" height="1" fill="#ffffff"/><rect x="3" y="4" width="1" height="1" fill="#ffffff"/></svg>
+
+    <!-- ArUco Marker ID 2 (Bottom-Left Anchor) -->
+    <svg width="42" height="42" viewBox="0 0 6 6" style="position: absolute; bottom: 18px; left: 18px; z-index: 100; background: #ffffff; padding: 3px; border-radius: 3px; box-shadow: 0 0 6px rgba(0,0,0,0.8);"><rect width="6" height="6" fill="#000000"/><rect x="1" y="1" width="1" height="1" fill="#ffffff"/><rect x="2" y="2" width="1" height="1" fill="#ffffff"/><rect x="3" y="2" width="1" height="1" fill="#ffffff"/><rect x="4" y="2" width="1" height="1" fill="#ffffff"/><rect x="1" y="3" width="1" height="1" fill="#ffffff"/><rect x="3" y="3" width="1" height="1" fill="#ffffff"/><rect x="2" y="4" width="1" height="1" fill="#ffffff"/><rect x="4" y="4" width="1" height="1" fill="#ffffff"/></svg>
+
+    <!-- ArUco Marker ID 3 (Bottom-Right Anchor) -->
+    <svg width="42" height="42" viewBox="0 0 6 6" style="position: absolute; bottom: 18px; right: 18px; z-index: 100; background: #ffffff; padding: 3px; border-radius: 3px; box-shadow: 0 0 6px rgba(0,0,0,0.8);"><rect width="6" height="6" fill="#000000"/><rect x="2" y="1" width="1" height="1" fill="#ffffff"/><rect x="3" y="1" width="1" height="1" fill="#ffffff"/><rect x="4" y="1" width="1" height="1" fill="#ffffff"/><rect x="1" y="2" width="1" height="1" fill="#ffffff"/><rect x="3" y="2" width="1" height="1" fill="#ffffff"/><rect x="4" y="2" width="1" height="1" fill="#ffffff"/><rect x="1" y="3" width="1" height="1" fill="#ffffff"/><rect x="2" y="4" width="1" height="1" fill="#ffffff"/><rect x="4" y="4" width="1" height="1" fill="#ffffff"/></svg>
 
     <!-- 1. Heart Rate (HR) -->
     <section class="readout-card card-hr" id="card-hr">
@@ -489,6 +500,34 @@
       // 4. EtCO2 - Yellow
       const currentEtco2 = getRandomInt(CONFIG.etco2.min, CONFIG.etco2.max);
       elEtco2.textContent = currentEtco2;
+
+      // Debug side-channel fetch logging for automated OCR accuracy verification
+      sendDebugGroundTruth('heart_rate', currentHr);
+      sendDebugGroundTruth('spo2', currentSpo2);
+      sendDebugGroundTruth('bp_systolic', currentSys);
+      sendDebugGroundTruth('bp_diastolic', currentDia);
+      sendDebugGroundTruth('etco2', currentEtco2);
+    }
+
+    /**
+     * Helper: Send ground-truth values to backend debug logging endpoint.
+     * Wrapped in try/catch to silently ignore failures and never affect simulator display behavior.
+     */
+    function sendDebugGroundTruth(field, value) {
+      try {
+        const API_BASE = window.location.origin;
+        fetch(`${API_BASE}/debug/ground-truth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            field: field,
+            value: value,
+            timestamp: new Date().toISOString()
+          })
+        }).catch(() => {});
+      } catch (err) {
+        // Silently ignore debug logging failures
+      }
     }
 
     /**

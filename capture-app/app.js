@@ -1,5 +1,9 @@
 // Camera Capture and Calibration Tool - Complete Application
 
+const API_BASE = (window.location.protocol && window.location.protocol.startsWith('http') && window.location.origin && window.location.origin !== 'null')
+  ? window.location.origin
+  : 'http://localhost:8000';
+
 document.addEventListener('DOMContentLoaded', () => {
   // DOM Elements
   const webcamFeed = document.getElementById('webcamFeed');
@@ -85,7 +89,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
       
-      // Preserve current select value if possible
       const currentVal = cameraSelect.value;
       cameraSelect.innerHTML = '<option value="">Default Camera</option>';
       
@@ -105,6 +108,8 @@ document.addEventListener('DOMContentLoaded', () => {
   async function initCamera(selectedDeviceId = null) {
     stopActiveStream();
     hideError();
+    if (webcamFeed) webcamFeed.classList.remove('hidden');
+    if (freezeCanvas) freezeCanvas.classList.add('hidden');
     updateStatus('connecting', 'Connecting camera...');
     freezeBtn.disabled = true;
 
@@ -128,24 +133,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const targetDeviceId = selectedDeviceId || (cameraSelect ? cameraSelect.value : null);
 
     try {
-      // Stage 1: Try high resolution with exact/ideal constraints
+      // Stage 1: Try exact target deviceId or ideal resolution constraints
       try {
-        const constraints = {
-          video: targetDeviceId
-            ? { deviceId: { exact: targetDeviceId }, width: { ideal: TARGET_WIDTH }, height: { ideal: TARGET_HEIGHT } }
-            : { width: { ideal: TARGET_WIDTH }, height: { ideal: TARGET_HEIGHT } },
-          audio: false
-        };
+        const constraints = targetDeviceId
+          ? { video: { deviceId: { exact: targetDeviceId } }, audio: false }
+          : { video: { width: { ideal: TARGET_WIDTH }, height: { ideal: TARGET_HEIGHT } }, audio: false };
         mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       } catch (e1) {
-        console.warn('Stage 1 camera constraints failed, attempting fallback stage 2...', e1);
-        // Stage 2: Basic video constraint without fixed resolution or deviceId restriction
-        mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        console.warn('Stage 1 camera constraints failed, attempting stage 2 basic video constraint...', e1);
+        try {
+          // Stage 2: Basic video constraint without fixed resolution or deviceId restriction
+          mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } catch (e2) {
+          console.warn('Stage 2 failed, attempting stage 3 minimal video constraint...', e2);
+          // Stage 3: Bare minimal video constraint fallback
+          mediaStream = await navigator.mediaDevices.getUserMedia({ video: {} });
+        }
       }
 
       webcamFeed.srcObject = mediaStream;
 
-      webcamFeed.onloadedmetadata = () => {
+      const handleCameraMetadata = () => {
         webcamFeed.play().catch(e => console.warn('Autoplay prevented:', e));
         const width = webcamFeed.videoWidth || TARGET_WIDTH;
         const height = webcamFeed.videoHeight || TARGET_HEIGHT;
@@ -157,10 +165,20 @@ document.addEventListener('DOMContentLoaded', () => {
         offscreenCanvas.height = height;
 
         updateStatus('live', 'Live Feed');
+        if (!isMonitoring && !window._activeCaseId) {
+          updateTopCaseStatus('camera_live', null);
+        }
         freezeBtn.disabled = false;
         updateStepper();
         populateCameraDevices();
       };
+
+      if (webcamFeed.readyState >= 1) {
+        handleCameraMetadata();
+      } else {
+        webcamFeed.onloadedmetadata = handleCameraMetadata;
+      }
+      webcamFeed.play().catch(e => console.warn('Camera play attempt:', e));
 
     } catch (err) {
       console.error('Error accessing webcam:', err);
@@ -172,6 +190,8 @@ document.addEventListener('DOMContentLoaded', () => {
   async function initScreenShare() {
     stopActiveStream();
     hideError();
+    if (webcamFeed) webcamFeed.classList.remove('hidden');
+    if (freezeCanvas) freezeCanvas.classList.add('hidden');
     updateStatus('connecting', 'Sharing screen...');
     freezeBtn.disabled = true;
 
@@ -188,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       webcamFeed.srcObject = mediaStream;
 
-      webcamFeed.onloadedmetadata = () => {
+      const handleScreenMetadata = () => {
         webcamFeed.play().catch(e => console.warn('Autoplay prevented:', e));
         const width = webcamFeed.videoWidth || TARGET_WIDTH;
         const height = webcamFeed.videoHeight || TARGET_HEIGHT;
@@ -200,9 +220,19 @@ document.addEventListener('DOMContentLoaded', () => {
         offscreenCanvas.height = height;
 
         updateStatus('live', 'Screen Share');
+        if (!isMonitoring && !window._activeCaseId) {
+          updateTopCaseStatus('camera_live', null);
+        }
         freezeBtn.disabled = false;
         updateStepper();
       };
+
+      if (webcamFeed.readyState >= 1) {
+        handleScreenMetadata();
+      } else {
+        webcamFeed.onloadedmetadata = handleScreenMetadata;
+      }
+      webcamFeed.play().catch(e => console.warn('Play attempt:', e));
 
       // Listen for stream end (user clicks "Stop Sharing")
       mediaStream.getVideoTracks()[0].onended = () => {
@@ -220,12 +250,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function getDefaultDemoCalibration() {
+    return {
+      timestamp: new Date().toISOString(),
+      frameWidth: TARGET_WIDTH,
+      frameHeight: TARGET_HEIGHT,
+      regions: {
+        heartRate: { x: 25, y: 80, width: 160, height: 90, color: '#34D399' },
+        spo2: { x: 25, y: 230, width: 160, height: 90, color: '#38BDF8' },
+        bloodPressure: { x: 25, y: 380, width: 230, height: 90, color: '#F87171' },
+        etco2: { x: 25, y: 530, width: 160, height: 90, color: '#EAB93F' }
+      },
+      markers: {}
+    };
+  }
+
   // Fallback Mode 2: Simulated Patient Monitor Feed (Canvas Generator)
   function initSimulatedFeed() {
     stopActiveStream();
     hideError();
+    
+    if (webcamFeed) webcamFeed.classList.remove('hidden');
+    if (freezeCanvas) freezeCanvas.classList.add('hidden');
+    
     updateStatus('live', 'Demo Monitor');
+    if (!isMonitoring && !window._activeCaseId) {
+      updateTopCaseStatus('camera_live', null);
+    }
     freezeBtn.disabled = false;
+
+    if (!localStorage.getItem('monitorCalibration')) {
+      const defaultCalib = getDefaultDemoCalibration();
+      localStorage.setItem('monitorCalibration', JSON.stringify(defaultCalib));
+    }
+    showMonitoringSection();
+    startMonitoring();
 
     const simCanvas = document.createElement('canvas');
     simCanvas.width = TARGET_WIDTH;
@@ -276,10 +335,9 @@ document.addEventListener('DOMContentLoaded', () => {
       for (let x = 200; x < TARGET_WIDTH - 30; x += 2) {
         const t = (x / 50) - waveOffset;
         let y = 130 + Math.sin(t) * 8;
-        // PQRST Spike simulation
         const cycle = (x + waveOffset * 60) % 180;
-        if (cycle > 80 && cycle < 90) y -= 45; // R-peak
-        else if (cycle >= 90 && cycle < 100) y += 15; // S-dip
+        if (cycle > 80 && cycle < 90) y -= 45;
+        else if (cycle >= 90 && cycle < 100) y += 15;
         if (x === 200) simCtx.moveTo(x, y); else simCtx.lineTo(x, y);
       }
       simCtx.stroke();
@@ -311,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Divider
       simCtx.beginPath(); simCtx.moveTo(20, 350); simCtx.lineTo(TARGET_WIDTH - 20, 350); simCtx.stroke();
 
-      // Vital 3: NIBP Blood Pressure (Red/Orange)
+      // Vital 3: NIBP Blood Pressure (Orange)
       simCtx.fillStyle = '#d97706';
       simCtx.font = 'bold 18px Inter, sans-serif';
       simCtx.fillText('NIBP (Sys / Dia)', 30, 390);
@@ -344,20 +402,28 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       simCtx.stroke();
 
+      // Always populate offscreenCanvas
+      offscreenCanvas.width = TARGET_WIDTH;
+      offscreenCanvas.height = TARGET_HEIGHT;
+      offscreenCtx.drawImage(simCanvas, 0, 0);
+
       simulatedAnimationId = requestAnimationFrame(renderSimulatedFrame);
     }
 
     renderSimulatedFrame();
 
-    const stream = simCanvas.captureStream(30);
-    mediaStream = stream;
-    webcamFeed.srcObject = mediaStream;
+    try {
+      const stream = simCanvas.captureStream(30);
+      mediaStream = stream;
+      webcamFeed.srcObject = mediaStream;
+      webcamFeed.play().catch(e => console.warn('Simulated video play prevented:', e));
+    } catch (e) {
+      console.warn('Canvas captureStream not supported/allowed in this browser:', e);
+    }
 
     actualResText.textContent = `Feed Resolution: ${TARGET_WIDTH} × ${TARGET_HEIGHT} px (Demo Feed)`;
     freezeCanvas.width = TARGET_WIDTH;
     freezeCanvas.height = TARGET_HEIGHT;
-    offscreenCanvas.width = TARGET_WIDTH;
-    offscreenCanvas.height = TARGET_HEIGHT;
     updateStepper();
   }
 
@@ -372,22 +438,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Freeze Frame Logic
   function freezeCurrentFrame() {
-    const width = webcamFeed.videoWidth || TARGET_WIDTH;
-    const height = webcamFeed.videoHeight || TARGET_HEIGHT;
+    const width = (webcamFeed && webcamFeed.videoWidth > 0) ? webcamFeed.videoWidth : (offscreenCanvas.width || TARGET_WIDTH);
+    const height = (webcamFeed && webcamFeed.videoHeight > 0) ? webcamFeed.videoHeight : (offscreenCanvas.height || TARGET_HEIGHT);
 
     freezeCanvas.width = width;
     freezeCanvas.height = height;
-    offscreenCanvas.width = width;
-    offscreenCanvas.height = height;
 
-    // Capture frozen snapshot
-    offscreenCtx.drawImage(webcamFeed, 0, 0, width, height);
+    // Capture frozen snapshot from video feed if available
+    if (webcamFeed && webcamFeed.videoWidth > 0 && !webcamFeed.paused) {
+      try {
+        offscreenCanvas.width = width;
+        offscreenCanvas.height = height;
+        offscreenCtx.drawImage(webcamFeed, 0, 0, width, height);
+      } catch (e) {}
+    }
 
     // Switch view visibility
     webcamFeed.classList.add('hidden');
     freezeCanvas.classList.remove('hidden');
 
-    // Update UI headers & status
     stepBadge.textContent = 'Step 2 & 3';
     stepTitle.textContent = 'Click and drag to draw a box around each vital sign';
     freezeBtnText.textContent = 'Resume Live Feed';
@@ -438,13 +507,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Mouse Event Handlers for Rectangle Drawing
   freezeCanvas.addEventListener('mousedown', (e) => {
-    if (!isFrozen || boxes.length >= 4 || !labelModal.classList.contains('hidden')) return;
+    if (!isFrozen) return;
+    isDrawing = true;
     const coords = getCanvasCoords(e);
     startX = coords.x;
     startY = coords.y;
     currentX = coords.x;
     currentY = coords.y;
-    isDrawing = true;
   });
 
   freezeCanvas.addEventListener('mousemove', (e) => {
@@ -453,321 +522,283 @@ document.addEventListener('DOMContentLoaded', () => {
     currentX = coords.x;
     currentY = coords.y;
     redrawCanvas();
+    drawPendingRect();
   });
 
-  function finishDrawing(e) {
+  freezeCanvas.addEventListener('mouseup', () => {
     if (!isDrawing) return;
     isDrawing = false;
-    const coords = getCanvasCoords(e);
-    currentX = coords.x;
-    currentY = coords.y;
-
+    
     const x = Math.min(startX, currentX);
     const y = Math.min(startY, currentY);
-    const w = Math.abs(currentX - startX);
-    const h = Math.abs(currentY - startY);
+    const width = Math.abs(currentX - startX);
+    const height = Math.abs(currentY - startY);
 
-    if (w >= 15 && h >= 15) {
-      pendingBox = { x, y, width: w, height: h };
-      showLabelModal();
+    if (width > 20 && height > 20) {
+      pendingBox = { x, y, width, height };
+      openLabelModal();
     } else {
-      pendingBox = null;
-    }
-    redrawCanvas();
-  }
-
-  freezeCanvas.addEventListener('mouseup', finishDrawing);
-  freezeCanvas.addEventListener('mouseleave', () => {
-    if (isDrawing) {
-      isDrawing = false;
       redrawCanvas();
     }
   });
 
-  // Touch Event Support
-  freezeCanvas.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) {
-      const touch = e.touches[0];
-      const mouseEvent = new MouseEvent('mousedown', {
-        clientX: touch.clientX,
-        clientY: touch.clientY
-      });
-      freezeCanvas.dispatchEvent(mouseEvent);
-    }
-  });
+  function drawPendingRect() {
+    const ctx = freezeCanvas.getContext('2d');
+    const x = Math.min(startX, currentX);
+    const y = Math.min(startY, currentY);
+    const width = Math.abs(currentX - startX);
+    const height = Math.abs(currentY - startY);
 
-  freezeCanvas.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 1) {
-      const touch = e.touches[0];
-      const mouseEvent = new MouseEvent('mousemove', {
-        clientX: touch.clientX,
-        clientY: touch.clientY
-      });
-      freezeCanvas.dispatchEvent(mouseEvent);
-    }
-  });
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(x, y, width, height);
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
+    ctx.fillRect(x, y, width, height);
+    ctx.setLineDash([]);
+  }
 
-  freezeCanvas.addEventListener('touchend', () => {
-    const mouseEvent = new MouseEvent('mouseup', {});
-    freezeCanvas.dispatchEvent(mouseEvent);
-  });
+  // Modal Label Selector
+  function openLabelModal() {
+    updateAvailableLabelOptions();
+    labelModal.classList.remove('hidden');
+  }
 
-  // Label Selection Modal Helpers
-  function showLabelModal() {
-    const assignedLabels = boxes.map(b => b.label);
+  function closeLabelModal() {
+    labelModal.classList.add('hidden');
+    pendingBox = null;
+    redrawCanvas();
+  }
+
+  function updateAvailableLabelOptions() {
+    const labeledTypes = boxes.map(b => b.label);
     labelOptBtns.forEach(btn => {
       const label = btn.dataset.label;
-      if (assignedLabels.includes(label)) {
+      if (labeledTypes.includes(label)) {
         btn.disabled = true;
       } else {
         btn.disabled = false;
       }
     });
-
-    labelModal.classList.remove('hidden');
   }
 
-  function hideLabelModal() {
-    labelModal.classList.add('hidden');
-  }
-
-  // Option Button Click Handler
   labelOptBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       if (!pendingBox) return;
-
       const label = btn.dataset.label;
       const color = btn.dataset.color;
-
+      
       boxes.push({
-        id: Date.now(),
+        ...pendingBox,
         label,
-        color,
-        x: pendingBox.x,
-        y: pendingBox.y,
-        width: pendingBox.width,
-        height: pendingBox.height
+        color
       });
 
-      pendingBox = null;
-      hideLabelModal();
-      updateChecklist();
+      closeLabelModal();
+      updateChecklistUI();
       redrawCanvas();
     });
   });
 
-  // Cancel Box Button Handler
-  cancelLabelBtn.addEventListener('click', () => {
-    pendingBox = null;
-    hideLabelModal();
-    redrawCanvas();
-  });
-
-  // Undo & Reset Action Handlers
-  undoBtn.addEventListener('click', () => {
-    if (boxes.length > 0) {
-      boxes.pop();
-      updateChecklist();
-      redrawCanvas();
-    }
-  });
-
-  resetBtn.addEventListener('click', () => {
-    if (boxes.length > 0) {
-      boxes = [];
-      updateChecklist();
-      redrawCanvas();
-    }
-  });
-
-  // Build Calibration JSON Object
-  function buildCalibrationJSON() {
-    const findBox = (label) => boxes.find(b => b.label === label);
-
-    const hrBox = findBox('Heart Rate');
-    const spo2Box = findBox('SpO2');
-    const bpBox = findBox('Blood Pressure');
-    const etco2Box = findBox('EtCO2');
-
-    return {
-      calibratedAt: new Date().toISOString(),
-      frameWidth: freezeCanvas.width || TARGET_WIDTH,
-      frameHeight: freezeCanvas.height || TARGET_HEIGHT,
-      regions: {
-        heartRate: hrBox ? { x: Math.round(hrBox.x), y: Math.round(hrBox.y), width: Math.round(hrBox.width), height: Math.round(hrBox.height) } : null,
-        spo2: spo2Box ? { x: Math.round(spo2Box.x), y: Math.round(spo2Box.y), width: Math.round(spo2Box.width), height: Math.round(spo2Box.height) } : null,
-        bloodPressure: bpBox ? { x: Math.round(bpBox.x), y: Math.round(bpBox.y), width: Math.round(bpBox.width), height: Math.round(bpBox.height) } : null,
-        etco2: etco2Box ? { x: Math.round(etco2Box.x), y: Math.round(etco2Box.y), width: Math.round(etco2Box.width), height: Math.round(etco2Box.height) } : null
-      }
-    };
+  if (cancelLabelBtn) {
+    cancelLabelBtn.addEventListener('click', closeLabelModal);
   }
 
-  // Save Calibration to LocalStorage
-  function saveCalibration() {
-    if (boxes.length < 4) return;
-
-    const data = buildCalibrationJSON();
-    try {
-      localStorage.setItem('monitorCalibration', JSON.stringify(data, null, 2));
-      showSuccessBanner(
-        'Calibration Saved!',
-        'Calibration saved! You can now start monitoring.'
-      );
-      showMonitoringSection();
-    } catch (e) {
-      console.error('Failed to save calibration to localStorage:', e);
-      alert('Failed to save to localStorage.');
-    }
-  }
-
-  // Download Calibration as JSON File
-  function downloadCalibrationFile() {
-    if (boxes.length < 4) return;
-
-    const data = buildCalibrationJSON();
-    const jsonStr = JSON.stringify(data, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `monitor_calibration_${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    showSuccessBanner(
-      'File Downloaded!',
-      'Calibration saved! You can now start monitoring.'
-    );
-    showMonitoringSection();
-  }
-
-  // Display Success Banner
-  function showSuccessBanner(title, message) {
-    bannerTitle.textContent = title;
-    bannerText.textContent = message;
-    saveSuccessBanner.classList.remove('hidden');
-    saveSuccessBanner.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  closeBannerBtn.addEventListener('click', () => {
-    saveSuccessBanner.classList.add('hidden');
-  });
-
-  saveBtn.addEventListener('click', saveCalibration);
-  downloadBtn.addEventListener('click', downloadCalibrationFile);
-
-  // Update Checklist & Enable/Disable Action Buttons
-  function updateChecklist() {
-    markedCount.textContent = boxes.length;
-
-    const markedLabels = boxes.map(b => b.label);
-    const checklistItems = checklistGroup.querySelectorAll('.checklist-item');
-
-    checklistItems.forEach(item => {
-      const vitalName = item.dataset.vital;
-      const statusSpan = item.querySelector('.vital-status');
-
-      if (markedLabels.includes(vitalName)) {
-        item.classList.add('marked');
-        statusSpan.textContent = '✓ Marked';
-        statusSpan.className = 'vital-status status-done';
-      } else {
-        item.classList.remove('marked');
-        statusSpan.textContent = '(not yet)';
-        statusSpan.className = 'vital-status status-pending';
-      }
-    });
-
-    const isAllMarked = boxes.length === 4;
-    saveBtn.disabled = !isAllMarked;
-    downloadBtn.disabled = !isAllMarked;
-    undoBtn.disabled = boxes.length === 0;
-    resetBtn.disabled = boxes.length === 0;
-
-    updateStepper();
-  }
-
-  // Update Visual Stepper State
-  function updateStepper() {
-    // Reset all nodes
-    [stepNode1, stepNode2, stepNode3, stepNode4].forEach(n => n.className = 'step-node');
-    [connector1, connector2, connector3].forEach(c => c.className = 'step-connector');
-
-    if (!isFrozen) {
-      stepNode1.classList.add('active');
-    } else if (boxes.length < 4) {
-      stepNode1.classList.add('complete');
-      connector1.classList.add('complete');
-      stepNode2.classList.add('complete');
-      connector2.classList.add('complete');
-      stepNode3.classList.add('active');
-    } else {
-      stepNode1.classList.add('complete');
-      connector1.classList.add('complete');
-      stepNode2.classList.add('complete');
-      connector2.classList.add('complete');
-      stepNode3.classList.add('complete');
-      connector3.classList.add('complete');
-      stepNode4.classList.add('active');
-    }
-  }
-
-  // Redraw Canvas (Frozen Image + Boxes + Active Draft)
+  // Redraw Canvas Overlay
   function redrawCanvas() {
     const ctx = freezeCanvas.getContext('2d');
     ctx.clearRect(0, 0, freezeCanvas.width, freezeCanvas.height);
-
-    if (offscreenCanvas.width > 0) {
+    
+    if (offscreenCanvas.width > 0 && offscreenCanvas.height > 0) {
       ctx.drawImage(offscreenCanvas, 0, 0);
     }
 
-    boxes.forEach(box => {
+    boxes.forEach((box, idx) => {
       ctx.strokeStyle = box.color;
       ctx.lineWidth = 3;
       ctx.strokeRect(box.x, box.y, box.width, box.height);
 
-      ctx.fillStyle = box.color + '22';
-      ctx.fillRect(box.x, box.y, box.width, box.height);
-
-      ctx.font = 'bold 15px Inter, sans-serif';
-      const textMetrics = ctx.measureText(box.label);
-      const padX = 10;
-      const pillWidth = textMetrics.width + (padX * 2);
-      const pillHeight = 26;
-      
-      const pillY = box.y >= 32 ? box.y - 30 : box.y + 4;
-      const pillX = box.x;
-
       ctx.fillStyle = box.color;
-      if (ctx.roundRect) {
-        ctx.beginPath();
-        ctx.roundRect(pillX, pillY, pillWidth, pillHeight, 4);
-        ctx.fill();
-      } else {
-        ctx.fillRect(pillX, pillY, pillWidth, pillHeight);
-      }
+      ctx.font = 'bold 14px Inter, sans-serif';
+      const textMetrics = ctx.measureText(`${idx + 1}. ${box.label}`);
+      const bgWidth = textMetrics.width + 16;
+      ctx.fillRect(box.x, Math.max(0, box.y - 26), bgWidth, 26);
 
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(box.label, pillX + padX, pillY + 18);
+      ctx.fillText(`${idx + 1}. ${box.label}`, box.x + 8, Math.max(18, box.y - 8));
+    });
+  }
+
+  // Undo & Reset Actions
+  if (undoBtn) {
+    undoBtn.addEventListener('click', () => {
+      if (boxes.length > 0) {
+        boxes.pop();
+        updateChecklistUI();
+        redrawCanvas();
+      }
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      boxes = [];
+      updateChecklistUI();
+      redrawCanvas();
+    });
+  }
+
+  // Save Calibration Data
+  if (saveBtn) {
+    saveBtn.addEventListener('click', () => {
+      if (boxes.length === 0) {
+        alert('Please draw at least one region box before saving.');
+        return;
+      }
+
+      const calibration = {
+        timestamp: new Date().toISOString(),
+        frameWidth: freezeCanvas.width || TARGET_WIDTH,
+        frameHeight: freezeCanvas.height || TARGET_HEIGHT,
+        regions: {},
+        markers: {}
+      };
+
+      boxes.forEach(b => {
+        const keyMap = {
+          'Heart Rate': 'heartRate',
+          'SpO2': 'spo2',
+          'Blood Pressure': 'bloodPressure',
+          'EtCO2': 'etco2'
+        };
+        const key = keyMap[b.label] || b.label.toLowerCase();
+        calibration.regions[key] = {
+          x: Math.round(b.x),
+          y: Math.round(b.y),
+          width: Math.round(b.width),
+          height: Math.round(b.height),
+          color: b.color
+        };
+      });
+
+      // Detect and store ArUco anchor marker coordinates if present during calibration
+      if (typeof ArUcoDetector !== 'undefined') {
+        try {
+          const detector = new ArUcoDetector();
+          const fCtx = freezeCanvas.getContext('2d');
+          const imgData = fCtx.getImageData(0, 0, freezeCanvas.width || TARGET_WIDTH, freezeCanvas.height || TARGET_HEIGHT);
+          const detectedMarkers = detector.detect(imgData);
+          if (detectedMarkers && detectedMarkers.length > 0) {
+            detectedMarkers.forEach(m => {
+              calibration.markers[m.id] = {
+                x: Math.round(m.center.x),
+                y: Math.round(m.center.y)
+              };
+            });
+            console.log(`[ARUCO CALIBRATION SUCCESS] Detected and stored ${detectedMarkers.length} anchor markers:`, calibration.markers);
+          } else {
+            console.log('[ARUCO CALIBRATION NOTE] No ArUco anchor markers detected during calibration. Auto-alignment will run in fixed-ROI mode.');
+          }
+        } catch (e) {
+          console.warn('Error detecting ArUco markers during calibration:', e);
+        }
+      }
+
+      localStorage.setItem('monitorCalibration', JSON.stringify(calibration));
+      console.log('Saved monitor calibration to localStorage:', calibration);
+      showSaveSuccessBanner();
+      showMonitoringSection();
+      startMonitoring();
+    });
+  }
+
+  // Download Calibration JSON
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => {
+      const savedStr = localStorage.getItem('monitorCalibration');
+      if (!savedStr) {
+        alert('No calibration data saved yet.');
+        return;
+      }
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(savedStr);
+      const dlAnchor = document.createElement('a');
+      dlAnchor.setAttribute("href", dataStr);
+      dlAnchor.setAttribute("download", "monitor_calibration.json");
+      document.body.appendChild(dlAnchor);
+      dlAnchor.click();
+      dlAnchor.remove();
+    });
+  }
+
+  function showSaveSuccessBanner() {
+    if (saveSuccessBanner) {
+      saveSuccessBanner.classList.remove('hidden');
+      setTimeout(() => {
+        saveSuccessBanner.classList.add('hidden');
+      }, 5000);
+    }
+  }
+
+  if (closeBannerBtn) {
+    closeBannerBtn.addEventListener('click', () => {
+      if (saveSuccessBanner) saveSuccessBanner.classList.add('hidden');
+    });
+  }
+
+  // Update Checklist UI & Buttons state
+  function updateChecklistUI() {
+    markedCount.textContent = `${boxes.length} / 4`;
+
+    const items = [
+      { key: 'Heart Rate', id: 'checkHR' },
+      { key: 'SpO2', id: 'checkSpO2' },
+      { key: 'Blood Pressure', id: 'checkBP' },
+      { key: 'EtCO2', id: 'checkEtCO2' }
+    ];
+
+    const currentLabels = boxes.map(b => b.label);
+
+    items.forEach(item => {
+      const el = document.getElementById(item.id);
+      if (!el) return;
+      const statusSpan = el.querySelector('.check-status');
+
+      if (currentLabels.includes(item.key)) {
+        el.className = 'checklist-item complete';
+        if (statusSpan) statusSpan.textContent = '✓ Marked';
+      } else {
+        el.className = 'checklist-item pending';
+        if (statusSpan) statusSpan.textContent = 'Pending';
+      }
     });
 
-    if (isDrawing && (startX !== currentX || startY !== currentY)) {
-      const x = Math.min(startX, currentX);
-      const y = Math.min(startY, currentY);
-      const w = Math.abs(currentX - startX);
-      const h = Math.abs(currentY - startY);
+    if (undoBtn) undoBtn.disabled = boxes.length === 0;
+    if (resetBtn) resetBtn.disabled = boxes.length === 0;
+    if (saveBtn) saveBtn.disabled = boxes.length === 0;
+    if (downloadBtn) downloadBtn.disabled = !localStorage.getItem('monitorCalibration');
+  }
 
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]);
-      ctx.strokeRect(x, y, w, h);
+  // Stepper Visual Update
+  function updateStepper() {
+    stepNode1.className = 'step-node';
+    stepNode2.className = 'step-node';
+    stepNode3.className = 'step-node';
+    stepNode4.className = 'step-node';
 
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
-      ctx.fillRect(x, y, w, h);
-      ctx.setLineDash([]);
+    if (!isFrozen && boxes.length === 0) {
+      stepNode1.classList.add('active');
+    } else if (isFrozen && boxes.length === 0) {
+      stepNode1.classList.add('complete');
+      stepNode2.classList.add('active');
+    } else if (isFrozen && boxes.length > 0 && boxes.length < 4) {
+      stepNode1.classList.add('complete');
+      stepNode2.classList.add('complete');
+      stepNode3.classList.add('active');
+    } else if (boxes.length >= 4 || localStorage.getItem('monitorCalibration')) {
+      stepNode1.classList.add('complete');
+      stepNode2.classList.add('complete');
+      stepNode3.classList.add('complete');
+      stepNode4.classList.add('active');
     }
   }
 
@@ -795,11 +826,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (errorDiagnosticHint) {
         errorDiagnosticHint.classList.remove('hidden');
         errorDiagnosticHint.innerHTML = `
-          <strong>How to fix:</strong><br>
-          1. Start the FastAPI backend server in terminal:<br>
-          &nbsp;&nbsp;<code>uvicorn backend.main:app --reload</code><br>
-          2. Open <a href="http://localhost:8000/app/index.html" target="_blank" style="color: #38bdf8; text-decoration: underline;">http://localhost:8000/app/index.html</a> in your browser.<br>
-          3. Or click <strong>Screen Share</strong> or <strong>Demo Monitor</strong> below to test immediately!
+          <strong>Why this happens & How to test:</strong><br>
+          Modern browsers restrict physical webcam access to HTTPS or <code>localhost</code>.<br><br>
+          1. <strong>To test over LAN on mobile/iPad:</strong> Click the <strong>Demo Feed (Dev)</strong> button below to test immediate vital sign OCR calibration.<br>
+          2. <strong>To use physical camera:</strong> Access the app locally via <a href="${API_BASE}/app/index.html" target="_blank" style="color: #38bdf8; text-decoration: underline;">${API_BASE}/app/index.html</a> or setup an HTTPS proxy.
         `;
       }
     } else if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
@@ -880,34 +910,40 @@ document.addEventListener('DOMContentLoaded', () => {
   function startMonitoring() {
     if (isMonitoring) return;
 
-    const savedStr = localStorage.getItem('monitorCalibration');
+    let savedStr = localStorage.getItem('monitorCalibration');
     if (!savedStr) {
-      alert('No saved calibration found. Please complete calibration first.');
-      return;
+      if (boxes && boxes.length > 0) {
+        saveBtn.click();
+        savedStr = localStorage.getItem('monitorCalibration');
+      } else {
+        const defaultCalib = getDefaultDemoCalibration();
+        localStorage.setItem('monitorCalibration', JSON.stringify(defaultCalib));
+        savedStr = JSON.stringify(defaultCalib);
+      }
     }
 
     let calibration;
     try {
       calibration = JSON.parse(savedStr);
     } catch (e) {
-      alert('Invalid calibration data found in localStorage.');
-      return;
+      calibration = getDefaultDemoCalibration();
+      localStorage.setItem('monitorCalibration', JSON.stringify(calibration));
     }
 
     if (!calibration.regions || !calibration.regions.heartRate) {
-      alert('Incomplete calibration data.');
-      return;
+      calibration = getDefaultDemoCalibration();
+      localStorage.setItem('monitorCalibration', JSON.stringify(calibration));
     }
 
+    showMonitoringSection();
     isMonitoring = true;
     if (isFrozen) {
       unfreezeToLiveFeed();
     }
     if (startMonitoringBtn) startMonitoringBtn.classList.add('hidden');
     if (stopMonitoringBtn) stopMonitoringBtn.classList.remove('hidden');
-    updateMonitoringStatus('live', 'Monitoring Active (1s)');
+    updateMonitoringStatus('live', 'Monitoring Active (1s real-time)');
 
-    // Run first capture cycle immediately, then every 1 second for instant live updates
     captureAndProcessReadings(calibration);
     monitoringInterval = setInterval(() => {
       captureAndProcessReadings(calibration);
@@ -927,6 +963,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   let isProcessingCycle = false;
+  let sequentialFieldIndex = 0;
+  const lastCycleResults = {};
 
   async function captureAndProcessReadings(calibration) {
     if (isProcessingCycle) return;
@@ -935,178 +973,237 @@ document.addEventListener('DOMContentLoaded', () => {
       const width = (webcamFeed && webcamFeed.videoWidth) ? webcamFeed.videoWidth : (offscreenCanvas.width || calibration.frameWidth || TARGET_WIDTH);
       const height = (webcamFeed && webcamFeed.videoHeight) ? webcamFeed.videoHeight : (offscreenCanvas.height || calibration.frameHeight || TARGET_HEIGHT);
 
-    // Capture full frame to canvas
-    const fullCanvas = document.createElement('canvas');
-    fullCanvas.width = width;
-    fullCanvas.height = height;
-    const fullCtx = fullCanvas.getContext('2d');
+      const fullCanvas = document.createElement('canvas');
+      fullCanvas.width = width;
+      fullCanvas.height = height;
+      const fullCtx = fullCanvas.getContext('2d');
 
-    let drewFrame = false;
+      let drewFrame = false;
 
-    // Prioritize live webcam/screen/demo video feed whenever active
-    if (webcamFeed && webcamFeed.videoWidth > 0 && !webcamFeed.paused && !webcamFeed.ended) {
-      try {
-        fullCtx.drawImage(webcamFeed, 0, 0, width, height);
+      if (webcamFeed && webcamFeed.videoWidth > 0 && !webcamFeed.paused && !webcamFeed.ended) {
+        try {
+          fullCtx.drawImage(webcamFeed, 0, 0, width, height);
+          drewFrame = true;
+        } catch (e) {}
+      }
+
+      if (!drewFrame && offscreenCanvas.width > 0 && offscreenCanvas.height > 0) {
+        fullCtx.drawImage(offscreenCanvas, 0, 0, width, height);
         drewFrame = true;
-      } catch (e) {}
-    }
-
-    // Fall back to offscreen snapshot if live video feed is unavailable
-    if (!drewFrame && offscreenCanvas.width > 0 && offscreenCanvas.height > 0) {
-      fullCtx.drawImage(offscreenCanvas, 0, 0, width, height);
-      drewFrame = true;
-    }
-
-    if (!drewFrame) {
-      console.warn('No active frame available for monitoring capture');
-      return;
-    }
-
-    const scaleX = width / (calibration.frameWidth || width);
-    const scaleY = height / (calibration.frameHeight || height);
-
-    const fieldsMap = [
-      { key: 'heartRate', fieldType: 'heart_rate' },
-      { key: 'spo2', fieldType: 'spo2' },
-      { key: 'bloodPressure', fieldType: 'blood_pressure' },
-      { key: 'etco2', fieldType: 'etco2' }
-    ];
-
-    const cycleResults = {};
-
-    const tasks = fieldsMap.map(({ key, fieldType }) => {
-      const region = calibration.regions[key];
-      if (!region || !region.width || !region.height) {
-        cycleResults[fieldType] = { raw_value: null, smoothed_value: null, status: "error" };
-        updateFieldUI(fieldType, null, null, 'error');
-        return Promise.resolve();
       }
 
-      const rx = Math.round(region.x * scaleX);
-      const ry = Math.round(region.y * scaleY);
-      const rw = Math.round(region.width * scaleX);
-      const rh = Math.round(region.height * scaleY);
-
-      if (rw <= 0 || rh <= 0) {
-        cycleResults[fieldType] = { raw_value: null, smoothed_value: null, status: "error" };
-        updateFieldUI(fieldType, null, null, 'error');
-        return Promise.resolve();
+      if (!drewFrame) {
+        console.warn('No active frame available for monitoring capture');
+        return;
       }
 
-      const cropCanvas = document.createElement('canvas');
-      cropCanvas.width = rw;
-      cropCanvas.height = rh;
-      const cropCtx = cropCanvas.getContext('2d');
+      const scaleX = width / (calibration.frameWidth || width);
+      const scaleY = height / (calibration.frameHeight || height);
 
-      cropCtx.drawImage(fullCanvas, rx, ry, rw, rh, 0, 0, rw, rh);
+      // ArUco Anchor Auto-Alignment Shift Computation
+      let deltaX = 0;
+      let deltaY = 0;
+      let currentMarkerCount = 0;
+      const autoAlignTextEl = document.getElementById('autoAlignText');
+      const markerCountBadgeEl = document.getElementById('markerCountBadge');
 
-      return new Promise((resolve) => {
-        cropCanvas.toBlob(async (blob) => {
-          if (!blob) {
-            cycleResults[fieldType] = { raw_value: null, smoothed_value: null, status: "error" };
-            updateFieldUI(fieldType, null, null, 'error');
-            resolve();
-            return;
-          }
+      if (calibration.markers && Object.keys(calibration.markers).length > 0 && typeof ArUcoDetector !== 'undefined') {
+        try {
+          const detector = new ArUcoDetector();
+          const frameImgData = fullCtx.getImageData(0, 0, width, height);
+          const currentMarkers = detector.detect(frameImgData);
+          currentMarkerCount = currentMarkers ? currentMarkers.length : 0;
 
-          const formData = new FormData();
-          formData.append('file', blob, `${fieldType}.jpg`);
-          formData.append('field_type', fieldType);
+          if (currentMarkers && currentMarkers.length > 0) {
+            let sumDx = 0;
+            let sumDy = 0;
+            let matchCount = 0;
 
-          try {
-            const resp = await fetch('http://localhost:8000/read-value', {
-              method: 'POST',
-              body: formData
+            currentMarkers.forEach(m => {
+              const calibPos = calibration.markers[m.id];
+              if (calibPos) {
+                sumDx += (m.center.x - calibPos.x * scaleX);
+                sumDy += (m.center.y - calibPos.y * scaleY);
+                matchCount++;
+              }
             });
 
-            if (!resp.ok) {
-              cycleResults[fieldType] = { raw_value: null, smoothed_value: null, status: "error" };
-              updateFieldUI(fieldType, null, null, 'error');
-              resolve();
-              return;
+            if (matchCount > 0) {
+              deltaX = sumDx / matchCount;
+              deltaY = sumDy / matchCount;
+              window._lastKnownAlignment = { deltaX, deltaY };
+
+              const shiftDist = Math.hypot(deltaX, deltaY);
+              if (shiftDist > 3) {
+                if (autoAlignTextEl) {
+                  autoAlignTextEl.innerHTML = `<span style="color: #38bdf8;">🎯 Auto-Aligned (Camera Shift: ${deltaX > 0 ? '+' : ''}${Math.round(deltaX)}px, ${deltaY > 0 ? '+' : ''}${Math.round(deltaY)}px)</span>`;
+                }
+              } else {
+                if (autoAlignTextEl) {
+                  autoAlignTextEl.innerHTML = `<span style="color: #4ade80;">🎯 Anchor Locked (Aligned)</span>`;
+                }
+              }
+            } else if (window._lastKnownAlignment) {
+              deltaX = window._lastKnownAlignment.deltaX;
+              deltaY = window._lastKnownAlignment.deltaY;
+              if (autoAlignTextEl) {
+                autoAlignTextEl.innerHTML = `<span style="color: #fbbf24;">⚠️ Anchor Occluded (Using Last Position)</span>`;
+              }
             }
-
-            const resData = await resp.json();
-            cycleResults[fieldType] = resData;
-            updateFieldUI(
-              fieldType,
-              resData.raw_value,
-              resData.smoothed_value,
-              resData.status
-            );
-          } catch (err) {
-            console.error(`Failed sending ROI frame for ${fieldType}:`, err);
-            cycleResults[fieldType] = { raw_value: null, smoothed_value: null, status: "error" };
-            updateFieldUI(fieldType, null, null, 'error');
+          } else if (window._lastKnownAlignment) {
+            deltaX = window._lastKnownAlignment.deltaX;
+            deltaY = window._lastKnownAlignment.deltaY;
+            if (autoAlignTextEl) {
+              autoAlignTextEl.innerHTML = `<span style="color: #fbbf24;">⚠️ Anchor Occluded (Using Last Position)</span>`;
+            }
+          } else {
+            if (autoAlignTextEl) {
+              autoAlignTextEl.innerHTML = `<span style="color: #94a3b8;">📍 Fixed ROI (Markers Not Visible)</span>`;
+            }
           }
-          resolve();
-        }, 'image/jpeg', 0.9);
-      });
-    });
-
-    await Promise.all(tasks);
-
-    // Construct exact cycle payload
-    const getVal = (fieldType) => (
-      cycleResults[fieldType]?.status === 'ok' || cycleResults[fieldType]?.status === 'fallback_estimated'
-        ? cycleResults[fieldType].smoothed_value
-        : null
-    );
-
-    const hrVal = getVal('heart_rate');
-    const spo2Val = getVal('spo2');
-    const etco2Val = getVal('etco2');
-
-    let bpSys = null;
-    let bpDia = null;
-    const bpVal = getVal('blood_pressure');
-    if (typeof bpVal === 'string') {
-      const match = bpVal.match(/^(\d+)\/(\d+)$/);
-      if (match) {
-        bpSys = parseFloat(match[1]);
-        bpDia = parseFloat(match[2]);
-      }
-    }
-
-    const cyclePayload = {
-      heart_rate: hrVal,
-      spo2: spo2Val,
-      bp_systolic: bpSys,
-      bp_diastolic: bpDia,
-      etco2: etco2Val
-    };
-
-    try {
-      const cycleResp = await fetch('http://localhost:8000/process-cycle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cyclePayload)
-      });
-
-      if (cycleResp.ok) {
-        const caseRes = await cycleResp.json();
-        updateTopCaseStatus(caseRes.status, caseRes.case_id);
-
-        const msg = caseRes.message || caseRes.status;
-        const displayLabel = caseRes.case_id ? `${msg} (${caseRes.case_id})` : msg;
-        
-        if (caseRes.status === 'recording' || caseRes.status === 'case_started') {
-          updateMonitoringStatus('live', displayLabel);
-        } else if (caseRes.status === 'case_ended') {
-          updateMonitoringStatus('frozen', displayLabel);
-        } else {
-          updateMonitoringStatus('connecting', displayLabel);
+        } catch (err) {
+          console.warn('Error computing ArUco alignment:', err);
+        }
+      } else {
+        if (autoAlignTextEl) {
+          autoAlignTextEl.innerHTML = `<span style="color: #94a3b8;">📍 Fixed ROI (No Markers Calibrated)</span>`;
         }
       }
+
+      if (markerCountBadgeEl) {
+        markerCountBadgeEl.textContent = `Markers: ${currentMarkerCount}`;
+      }
+
+      const fieldsMap = [
+        { key: 'heartRate', fieldType: 'heart_rate' },
+        { key: 'spo2', fieldType: 'spo2' },
+        { key: 'bloodPressure', fieldType: 'blood_pressure' },
+        { key: 'etco2', fieldType: 'etco2' }
+      ];
+
+      // Extract all 4 vital sign crops simultaneously in parallel for real-time 1s monitoring
+      await Promise.all(fieldsMap.map(async ({ key, fieldType }) => {
+        const region = calibration.regions[key];
+        if (region && region.width > 0 && region.height > 0) {
+          const rx = Math.max(0, Math.round((region.x * scaleX) + deltaX));
+          const ry = Math.max(0, Math.round((region.y * scaleY) + deltaY));
+          const rw = Math.min(width - rx, Math.round(region.width * scaleX));
+          const rh = Math.min(height - ry, Math.round(region.height * scaleY));
+
+          if (rw > 0 && rh > 0) {
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width = rw;
+            cropCanvas.height = rh;
+            const cropCtx = cropCanvas.getContext('2d');
+
+            cropCtx.drawImage(fullCanvas, rx, ry, rw, rh, 0, 0, rw, rh);
+
+            const cropImgEl = document.getElementById(`crop-img-${fieldType}`);
+            if (cropImgEl) {
+              cropImgEl.src = cropCanvas.toDataURL('image/jpeg', 0.85);
+            }
+
+            await new Promise((resolve) => {
+              cropCanvas.toBlob(async (blob) => {
+                if (!blob) {
+                  resolve();
+                  return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', blob, `${fieldType}.jpg`);
+                formData.append('field_type', fieldType);
+
+                try {
+                  const resp = await fetch(`${API_BASE}/read-value`, {
+                    method: 'POST',
+                    body: formData
+                  });
+
+                  if (resp.ok) {
+                    const resData = await resp.json();
+                    lastCycleResults[fieldType] = resData;
+                    updateFieldUI(
+                      fieldType,
+                      resData.raw_value,
+                      resData.smoothed_value,
+                      resData.status
+                    );
+                  } else {
+                    updateFieldUI(fieldType, null, null, 'error');
+                  }
+                } catch (err) {
+                  console.error(`Failed sending ROI frame for ${fieldType}:`, err);
+                  updateFieldUI(fieldType, null, null, 'error');
+                }
+                resolve();
+              }, 'image/jpeg', 0.9);
+            });
+          }
+        }
+      }));
+
+      const getVal = (fieldType) => (
+        lastCycleResults[fieldType]?.status === 'ok' || lastCycleResults[fieldType]?.status === 'fallback_estimated'
+          ? lastCycleResults[fieldType].smoothed_value
+          : null
+      );
+
+      const hrVal = getVal('heart_rate');
+      const spo2Val = getVal('spo2');
+      const etco2Val = getVal('etco2');
+
+      let bpSys = null;
+      let bpDia = null;
+      const bpVal = getVal('blood_pressure');
+      if (typeof bpVal === 'string') {
+        const match = bpVal.match(/^(\d+)\/(\d+)$/);
+        if (match) {
+          bpSys = parseFloat(match[1]);
+          bpDia = parseFloat(match[2]);
+        }
+      }
+
+      const cyclePayload = {
+        heart_rate: hrVal,
+        spo2: spo2Val,
+        bp_systolic: bpSys,
+        bp_diastolic: bpDia,
+        etco2: etco2Val,
+        readings: lastCycleResults
+      };
+
+      try {
+        const cycleResp = await fetch(`${API_BASE}/process-cycle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cyclePayload)
+        });
+
+        if (cycleResp.ok) {
+          const caseRes = await cycleResp.json();
+          updateTopCaseStatus(caseRes.status, caseRes.case_id);
+
+          const msg = caseRes.message || caseRes.status;
+          const displayLabel = caseRes.case_id ? `${msg} (${caseRes.case_id})` : msg;
+          
+          if (caseRes.status === 'recording' || caseRes.status === 'case_started') {
+            updateMonitoringStatus('live', displayLabel);
+          } else if (caseRes.status === 'case_ended') {
+            updateMonitoringStatus('frozen', displayLabel);
+          } else {
+            updateMonitoringStatus('connecting', displayLabel);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to post cycle to /process-cycle:', err);
+      }
     } catch (err) {
-      console.error('Failed to post cycle to /process-cycle:', err);
+      console.error('Error during capture and process cycle:', err);
+    } finally {
+      isProcessingCycle = false;
     }
-  } catch (err) {
-    console.error('Error during capture and process cycle:', err);
-  } finally {
-    isProcessingCycle = false;
   }
-}
 
   function updateTopCaseStatus(status, caseId) {
     const caseStatusBar = document.getElementById('caseStatusBar');
@@ -1114,23 +1211,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const caseStatusText = document.getElementById('caseStatusText');
     const caseIdBadge = document.getElementById('caseIdBadge');
     const caseIdText = document.getElementById('caseIdText');
+    const manualStartBtn = document.getElementById('manualStartCaseBtn');
+    const manualEndBtn = document.getElementById('manualEndCaseBtn');
 
     if (!caseStatusBar) return;
 
     caseStatusBar.className = 'case-status-bar';
 
     if (status === 'case_started' || status === 'recording') {
+      window._activeCaseId = caseId;
       caseStatusBar.classList.add('status-recording');
       if (caseStatusIcon) caseStatusIcon.textContent = '🟢';
       if (caseStatusText) caseStatusText.textContent = 'Case Started — Recording';
+      if (manualStartBtn) manualStartBtn.disabled = true;
+      if (manualEndBtn) manualEndBtn.disabled = false;
     } else if (status === 'case_ended') {
+      window._activeCaseId = null;
       caseStatusBar.classList.add('status-ended');
       if (caseStatusIcon) caseStatusIcon.textContent = '🔴';
       if (caseStatusText) caseStatusText.textContent = 'Case Ended';
+      if (manualStartBtn) manualStartBtn.disabled = false;
+      if (manualEndBtn) manualEndBtn.disabled = true;
+    } else if (status === 'camera_live' || status === 'live') {
+      caseStatusBar.classList.add('status-live');
+      if (caseStatusIcon) caseStatusIcon.textContent = '📷';
+      if (caseStatusText) caseStatusText.textContent = 'Camera Signal Live — Freeze Frame & Draw Boxes to Calibrate';
+      if (manualStartBtn) manualStartBtn.disabled = false;
+      if (manualEndBtn) manualEndBtn.disabled = true;
     } else {
       caseStatusBar.classList.add('status-waiting');
       if (caseStatusIcon) caseStatusIcon.textContent = '⏳';
-      if (caseStatusText) caseStatusText.textContent = 'Waiting for stable signal';
+      if (caseStatusText) caseStatusText.textContent = 'Waiting for camera signal / calibration';
+      if (manualStartBtn) manualStartBtn.disabled = false;
+      if (manualEndBtn) manualEndBtn.disabled = true;
     }
 
     const dashboardLink = document.getElementById('dashboardLink');
@@ -1170,33 +1283,42 @@ document.addEventListener('DOMContentLoaded', () => {
       rawEl.textContent = rawValue !== null && rawValue !== undefined ? rawValue : '--';
     }
 
-    if (dotEl && statusEl) {
-      dotEl.className = 'status-dot-indicator';
-
+    if (statusEl) {
       if (status === 'ok') {
-        dotEl.classList.add('dot-green');
+        if (dotEl) { dotEl.style.backgroundColor = '#34D399'; dotEl.style.boxShadow = '0 0 6px #34D399'; }
         statusEl.textContent = 'ok';
+        statusEl.style.color = '#34D399';
         if (noteEl) noteEl.classList.add('hidden');
       } else if (status === 'fallback_estimated') {
-        dotEl.classList.add('dot-purple');
+        if (dotEl) { dotEl.style.backgroundColor = '#C084FC'; dotEl.style.boxShadow = '0 0 6px #C084FC'; }
         statusEl.textContent = 'Demo simulation';
+        statusEl.style.color = '#C084FC';
         if (noteEl) noteEl.classList.add('hidden');
       } else if (status === 'bad_frame') {
-        dotEl.classList.add('dot-orange');
+        if (dotEl) { dotEl.style.backgroundColor = '#FB923C'; dotEl.style.boxShadow = 'none'; }
         statusEl.textContent = 'bad frame';
+        statusEl.style.color = '#FB923C';
+        if (noteEl) noteEl.classList.remove('hidden');
+      } else if (status === 'signal_lost') {
+        if (dotEl) { dotEl.style.backgroundColor = '#FB923C'; dotEl.style.boxShadow = 'none'; }
+        statusEl.textContent = 'signal lost';
+        statusEl.style.color = '#FB923C';
         if (noteEl) noteEl.classList.remove('hidden');
       } else if (status === 'unreadable') {
-        dotEl.classList.add('dot-gray');
+        if (dotEl) { dotEl.style.backgroundColor = '#94A3B8'; dotEl.style.boxShadow = 'none'; }
         statusEl.textContent = 'unreadable';
+        statusEl.style.color = '#94A3B8';
         if (noteEl) noteEl.classList.remove('hidden');
       } else if (status === 'invalid_range') {
-        dotEl.classList.add('dot-red');
+        if (dotEl) { dotEl.style.backgroundColor = '#F87171'; dotEl.style.boxShadow = 'none'; }
         statusEl.textContent = 'invalid range';
+        statusEl.style.color = '#F87171';
         if (noteEl) noteEl.classList.remove('hidden');
         console.warn(`[Digitizer Warning] Invalid range for ${fieldType}: raw=${rawValue}, holding last smoothed=${smoothedValue}`);
       } else {
-        dotEl.classList.add('dot-red');
+        if (dotEl) { dotEl.style.backgroundColor = '#F87171'; dotEl.style.boxShadow = 'none'; }
         statusEl.textContent = 'error';
+        statusEl.style.color = '#F87171';
         if (noteEl) noteEl.classList.remove('hidden');
         console.warn(`[Digitizer Error] Processing error for ${fieldType}: status=${status}, holding last smoothed=${smoothedValue}`);
       }
@@ -1216,6 +1338,22 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (e) {
       console.warn('Could not read existing calibration:', e);
+    }
+  }
+
+  async function checkInitialActiveCase() {
+    try {
+      const resp = await fetch(`${API_BASE}/active-case`);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.case_id) {
+          updateTopCaseStatus('recording', data.case_id);
+        } else {
+          updateTopCaseStatus('waiting', null);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not check initial active case state:', err);
     }
   }
 
@@ -1242,8 +1380,149 @@ document.addEventListener('DOMContentLoaded', () => {
     stopMonitoringBtn.addEventListener('click', stopMonitoring);
   }
 
+  const manualStartBtn = document.getElementById('manualStartCaseBtn');
+  const manualEndBtn = document.getElementById('manualEndCaseBtn');
+  const saveCaseMetaBtn = document.getElementById('saveCaseMetaBtn');
+
+  async function sendCaseStartWithMetadata() {
+    const pId = document.getElementById('patientIdInput')?.value.trim() || null;
+    const aId = document.getElementById('anesthetistIdInput')?.value.trim() || null;
+    const room = document.getElementById('orRoomInput')?.value.trim() || null;
+
+    try {
+      const resp = await fetch(`${API_BASE}/case/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patient_id: pId,
+          anesthetist_id: aId,
+          or_room: room
+        })
+      });
+      if (resp.ok) {
+        const resData = await resp.json();
+        updateTopCaseStatus(resData.status, resData.case_id);
+        return resData;
+      }
+    } catch (err) {
+      console.error('Failed to start/update case metadata:', err);
+    }
+    return null;
+  }
+
+  if (saveCaseMetaBtn) {
+    saveCaseMetaBtn.addEventListener('click', async () => {
+      const res = await sendCaseStartWithMetadata();
+      if (res && saveCaseMetaBtn) {
+        const origText = saveCaseMetaBtn.textContent;
+        saveCaseMetaBtn.textContent = '✅ Saved!';
+        saveCaseMetaBtn.style.backgroundColor = '#10b981';
+        setTimeout(() => {
+          saveCaseMetaBtn.textContent = origText;
+          saveCaseMetaBtn.style.backgroundColor = '';
+        }, 2000);
+      }
+    });
+  }
+
+  if (manualStartBtn) {
+    manualStartBtn.addEventListener('click', async () => {
+      await sendCaseStartWithMetadata();
+    });
+  }
+
+  if (manualEndBtn) {
+    manualEndBtn.addEventListener('click', async () => {
+      try {
+        const resp = await fetch(`${API_BASE}/case/end`, {
+          method: 'POST'
+        });
+        if (resp.ok) {
+          const resData = await resp.json();
+          updateTopCaseStatus(resData.status, resData.case_id);
+        }
+      } catch (err) {
+        console.error('Failed to manually end case:', err);
+      }
+    });
+  }
+
+  // Network LAN URL & QR Code Modal Logic (Points to Live Clinical Dashboard for Mobile / iPad)
+  let currentLanUrl = `${API_BASE}/app/dashboard.html`;
+  let qrCodeInstance = null;
+
+  async function initNetworkInfo() {
+    const lanUrlDisplay = document.getElementById('lanUrlDisplay');
+    const qrcodeContainer = document.getElementById('qrcodeContainer');
+
+    try {
+      const resp = await fetch(`${API_BASE}/network-info`);
+      if (resp.ok) {
+        const data = await resp.json();
+        currentLanUrl = data.lan_url || `${API_BASE}/app/dashboard.html`;
+      }
+    } catch (e) {
+      console.warn('Could not fetch network info:', e);
+      currentLanUrl = `${API_BASE}/app/dashboard.html`;
+    }
+
+    if (lanUrlDisplay) {
+      lanUrlDisplay.textContent = currentLanUrl;
+    }
+
+    if (qrcodeContainer && window.QRCode) {
+      qrcodeContainer.innerHTML = '';
+      try {
+        qrCodeInstance = new QRCode(qrcodeContainer, {
+          text: currentLanUrl,
+          width: 160,
+          height: 160,
+          colorDark: '#0f172a',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } catch (err) {
+        console.warn('Could not generate QR code:', err);
+      }
+    }
+  }
+
+  const qrModalOpenBtn = document.getElementById('qrModalOpenBtn');
+  const closeQrModalBtn = document.getElementById('closeQrModalBtn');
+  const copyLanUrlBtn = document.getElementById('copyLanUrlBtn');
+  const qrCodeModal = document.getElementById('qrCodeModal');
+
+  if (qrModalOpenBtn && qrCodeModal) {
+    qrModalOpenBtn.addEventListener('click', () => {
+      qrCodeModal.classList.remove('hidden');
+    });
+  }
+
+  if (closeQrModalBtn && qrCodeModal) {
+    closeQrModalBtn.addEventListener('click', () => {
+      qrCodeModal.classList.add('hidden');
+    });
+  }
+
+  if (copyLanUrlBtn) {
+    copyLanUrlBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(currentLanUrl);
+        const originalText = copyLanUrlBtn.textContent;
+        copyLanUrlBtn.textContent = '✅ Copied!';
+        setTimeout(() => {
+          copyLanUrlBtn.textContent = originalText;
+        }, 2000);
+      } catch (err) {
+        console.warn('Clipboard copy failed:', err);
+      }
+    });
+  }
+
   // Initialize Application
   populateCameraDevices();
   initCamera();
   checkSavedCalibration();
+  checkInitialActiveCase();
+  initNetworkInfo();
 });

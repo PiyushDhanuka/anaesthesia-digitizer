@@ -6,16 +6,62 @@
   <title>Camera Capture & Calibration Tool</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=3">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    // Automatic mobile/tablet redirect to Live Clinical Dashboard
+    (function() {
+      var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth < 768 && !window.location.search.includes('desktop=true'));
+      if (isMobile && !window.location.search.includes('setup=true')) {
+        window.location.href = 'dashboard.html';
+      }
+    })();
+  </script>
+  <style>
+    /* Direct High-Specificity Component Alignment Overrides */
+    .controls-bar {
+      display: flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+      flex-wrap: wrap !important;
+    }
+    .controls-bar select, 
+    .controls-bar button, 
+    .controls-bar .case-id-badge {
+      height: 34px !important;
+      margin: 0 !important;
+      vertical-align: middle !important;
+      display: inline-flex !important;
+      align-items: center !important;
+    }
+    .case-meta-details input, 
+    .case-meta-details button {
+      height: 34px !important;
+      box-sizing: border-box !important;
+    }
+    .readout-card {
+      background-color: #1A2028 !important;
+      border: 1px solid #232B35 !important;
+      border-radius: 4px !important;
+      padding: 1rem 1.25rem !important;
+      min-height: 115px !important;
+    }
+  </style>
 </head>
 <body>
   <div id="app">
     <!-- Header -->
     <header class="app-header">
-      <div class="header-content">
-        <h1>Camera Capture & Calibration</h1>
-        <p class="subtitle">Patient Monitor Vital Signs Region of Interest (ROI) Tool</p>
+      <div class="header-content" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+        <div>
+          <h1 style="font-size: 1.35rem; font-weight: 600; color: var(--text-primary); margin: 0;">Camera Capture & Calibration</h1>
+          <p class="subtitle" style="margin-top: 2px;">Patient Monitor Vital Signs Region of Interest (ROI) Tool</p>
+        </div>
+        <button id="qrModalOpenBtn" class="btn btn-secondary btn-sm" style="height: 34px;" title="Open on Mobile / iPad via LAN QR Code">
+          <i data-lucide="smartphone" style="width: 14px; height: 14px;"></i> Mobile / iPad Link
+        </button>
       </div>
     </header>
 
@@ -42,20 +88,41 @@
       </div>
     </nav>
 
-    <main class="app-main">
+    <main class="app-main" style="display: flex; flex-direction: column; gap: 0.85rem;">
       <!-- Prominent Case Status Banner -->
       <div id="caseStatusBar" class="case-status-bar status-waiting">
-        <div class="status-main-info">
+        <div class="status-main-info" style="display: flex; align-items: center; gap: 8px;">
           <span class="status-icon" id="caseStatusIcon" aria-hidden="true"></span>
-          <span class="status-label" id="caseStatusText">Waiting for stable signal</span>
+          <span class="status-label" id="caseStatusText" style="font-weight: 600;">Waiting for stable signal</span>
         </div>
-        <div id="caseIdBadge" class="case-id-badge hidden">
+        <div id="caseIdBadge" class="case-id-badge hidden" style="display: flex; align-items: center; gap: 10px;">
           <span class="case-id-label">Active Case:</span>
-          <span id="caseIdText" class="case-id-val">--</span>
-          <a id="dashboardLink" href="dashboard.html" target="_blank" class="dashboard-btn">
+          <span id="caseIdText" class="case-id-val" style="font-family: var(--font-mono); color: var(--accent-spo2); font-weight: 600;">--</span>
+          <a id="dashboardLink" href="dashboard.html" target="_blank" class="btn btn-secondary btn-sm" style="height: 28px;">
             View Live Dashboard
           </a>
         </div>
+      </div>
+
+      <!-- Optional Case Details Form -->
+      <details class="case-meta-details" open style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 10px 14px;">
+        <summary style="cursor: pointer; color: var(--accent-spo2); font-weight: 600; font-size: 0.8rem; user-select: none;">
+          Case Metadata (Patient ID, Anesthetist, OR Room)
+        </summary>
+        <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center;">
+          <input type="text" id="patientIdInput" placeholder="Patient ID / MRN (e.g. PT-101)" style="flex: 1; min-width: 140px; height: 34px; font-size: 0.8rem;">
+          <input type="text" id="anesthetistIdInput" placeholder="Anesthetist ID (e.g. Dr. Smith)" style="flex: 1; min-width: 140px; height: 34px; font-size: 0.8rem;">
+          <input type="text" id="orRoomInput" placeholder="OR Room # (e.g. OR-2)" style="flex: 1; min-width: 120px; height: 34px; font-size: 0.8rem;">
+          <button id="saveCaseMetaBtn" class="btn btn-primary btn-sm" style="height: 34px; padding: 0 14px; font-weight: 600;">
+            Save Case Info
+          </button>
+        </div>
+      </details>
+
+      <!-- Auto-Alignment Marker Badge -->
+      <div id="autoAlignBadge" style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 8px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted);">
+        <span><strong style="color: var(--text-primary);">Anchor Auto-Alignment:</strong> <span id="autoAlignText" style="color: var(--text-primary); font-weight: 500;">Fixed ROI (No Markers Calibrated)</span></span>
+        <span id="markerCountBadge" style="background: var(--bg-base); border: 1px solid var(--border-subtle); color: var(--accent-spo2); padding: 3px 10px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; font-family: var(--font-mono); line-height: 1;">Markers: 0</span>
       </div>
 
       <!-- Success Message Banner -->
@@ -69,30 +136,30 @@
       </div>
 
       <!-- Main Container Area -->
-      <div class="viewport-card">
-        <div class="step-header">
-          <div class="step-info">
-            <span id="stepBadge" class="step-badge">Step 1</span>
-            <h2 id="stepTitle">Point your camera at the monitor screen</h2>
+      <div class="viewport-card" style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 14px; display: flex; flex-direction: column; gap: 12px;">
+        <div class="step-header" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+          <div class="step-info" style="display: flex; align-items: center; gap: 10px;">
+            <span id="stepBadge" class="step-badge" style="background: rgba(56, 189, 248, 0.12); color: var(--accent-spo2); font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600; padding: 3px 7px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.25);">Step 1</span>
+            <h2 id="stepTitle" style="font-size: 1rem; margin: 0; font-weight: 600; color: var(--text-primary);">Point camera at patient monitor screen</h2>
           </div>
-          <div class="controls-bar">
+          <div class="controls-bar" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <!-- Camera Device Select Dropdown -->
-            <select id="cameraSelect" class="camera-select-dropdown" title="Select Camera Device">
+            <select id="cameraSelect" class="camera-select-dropdown" style="height: 34px; padding: 0 10px; font-size: 0.8rem; background: var(--bg-base); border: 1px solid var(--border-subtle); color: var(--text-primary); border-radius: 4px;" title="Select Physical Camera Device">
               <option value="">Default Camera</option>
             </select>
             <!-- Source Selector Quick Action Buttons -->
-            <button id="screenShareBtn" class="btn btn-secondary btn-sm" title="Share Patient Monitor Tab/Window">
-              Screen Share
+            <button id="screenShareBtn" class="btn btn-secondary btn-sm" style="height: 34px;">
+              Screen Share (Dev)
             </button>
-            <button id="simulatedFeedBtn" class="btn btn-secondary btn-sm" title="Use Simulated Patient Monitor">
-              Demo Monitor
+            <button id="simulatedFeedBtn" class="btn btn-secondary btn-sm" style="height: 34px;">
+              Demo Feed (Dev)
             </button>
-            <div id="statusBadge" class="status-badge status-connecting">
-              <span class="status-dot"></span>
-              <span id="statusText">Connecting camera...</span>
+            <div id="statusBadge" class="case-id-badge" style="display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 8px;">
+              <span class="status-dot-indicator" style="width: 7px; height: 7px;"></span>
+              <span id="statusText" style="font-size: 0.75rem;">Connecting camera...</span>
             </div>
-            <button id="freezeBtn" class="btn btn-primary" disabled>
-              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <button id="freezeBtn" class="btn btn-primary" style="height: 34px; padding: 0 14px; font-weight: 600;" disabled>
+              <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M10 9v6m4-6v6m7-3A9 9 0 1 1 3 12a9 9 0 0 1 18 0z" />
               </svg>
               <span id="freezeBtnText">Freeze Frame</span>
@@ -100,36 +167,36 @@
           </div>
         </div>
 
-        <div class="viewport-wrapper">
-          <div class="viewport-container" id="viewportContainer">
-            <video id="webcamFeed" autoplay playsinline muted></video>
-            <canvas id="freezeCanvas" class="hidden"></canvas>
+        <div class="viewport-wrapper" style="position: relative; width: 100%; border-radius: 4px; overflow: hidden; border: 1px solid var(--border-subtle); background: #000;">
+          <div class="viewport-container" id="viewportContainer" style="position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000;">
+            <video id="webcamFeed" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: contain; display: block;"></video>
+            <canvas id="freezeCanvas" class="hidden" style="width: 100%; height: 100%; object-fit: contain;"></canvas>
             
             <!-- Label Picker Modal -->
             <div id="labelModal" class="label-modal-overlay hidden">
               <div class="label-modal-card">
-                <h3>What is this box?</h3>
-                <p class="modal-subtext">Select the vital sign displayed inside the rectangle you drew:</p>
+                <h3 style="font-size: 0.95rem;">Select Vital Sign Label</h3>
+                <p class="subtitle" style="margin-bottom: 0.5rem;">Select the parameter displayed inside the drawn bounding box:</p>
                 <div class="label-options">
-                  <button class="label-opt-btn" data-label="Heart Rate" data-color="#10b981">
-                    <span class="opt-dot" style="background-color: #10b981;"></span>
-                    Heart Rate
+                  <button class="label-opt-btn" data-label="Heart Rate" data-color="#34D399">
+                    <span class="opt-dot" style="background-color: var(--accent-hr);"></span>
+                    Heart Rate (HR)
                   </button>
-                  <button class="label-opt-btn" data-label="SpO2" data-color="#0284c7">
-                    <span class="opt-dot" style="background-color: #0284c7;"></span>
-                    SpO2
+                  <button class="label-opt-btn" data-label="SpO2" data-color="#38BDF8">
+                    <span class="opt-dot" style="background-color: var(--accent-spo2);"></span>
+                    SpO2 (Pulse Ox)
                   </button>
-                  <button class="label-opt-btn" data-label="Blood Pressure" data-color="#d97706">
-                    <span class="opt-dot" style="background-color: #d97706;"></span>
-                    Blood Pressure
+                  <button class="label-opt-btn" data-label="Blood Pressure" data-color="#F87171">
+                    <span class="opt-dot" style="background-color: var(--accent-nibp);"></span>
+                    Blood Pressure (NIBP)
                   </button>
-                  <button class="label-opt-btn" data-label="EtCO2" data-color="#8b5cf6">
-                    <span class="opt-dot" style="background-color: #8b5cf6;"></span>
-                    EtCO2
+                  <button class="label-opt-btn" data-label="EtCO2" data-color="#EAB93F">
+                    <span class="opt-dot" style="background-color: var(--accent-etco2);"></span>
+                    EtCO2 (Capnography)
                   </button>
                 </div>
-                <div class="modal-actions">
-                  <button id="cancelLabelBtn" class="btn btn-secondary btn-sm">Cancel Box</button>
+                <div class="modal-actions" style="margin-top: 0.5rem;">
+                  <button id="cancelLabelBtn" class="btn btn-secondary btn-sm w-full">Cancel Box</button>
                 </div>
               </div>
             </div>
@@ -139,18 +206,18 @@
               <div class="error-card">
                 <div class="error-icon" id="errorIcon" aria-hidden="true"></div>
                 <h3 id="errorTitle">Camera Connection Failed</h3>
-                <p id="errorMessage">We couldn't access your camera. Please ensure camera permissions are enabled in your browser settings and try again.</p>
+                <p id="errorMessage" style="font-size: 0.8rem; color: var(--text-muted);">Ensure camera permissions are enabled in browser settings.</p>
                 <div id="errorDiagnosticHint" class="error-diagnostic-hint hidden"></div>
-                <div class="error-actions">
-                  <button id="retryCameraBtn" class="btn btn-primary">Retry Camera</button>
-                  <button id="errorScreenShareBtn" class="btn btn-secondary">Screen Share</button>
-                  <button id="errorSimulatedBtn" class="btn btn-accent">Demo Monitor</button>
+                <div class="error-actions" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  <button id="retryCameraBtn" class="btn btn-primary btn-sm">Retry Camera</button>
+                  <button id="errorScreenShareBtn" class="btn btn-secondary btn-sm">Screen Share</button>
+                  <button id="errorSimulatedBtn" class="btn btn-secondary btn-sm">Demo Monitor</button>
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="viewport-info">
+          <div class="viewport-info" style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); padding: 6px 10px;">
             <span>Target Resolution: <strong>1280 &times; 720 px (16:9)</strong></span>
             <span id="actualResText">Feed Resolution: --</span>
           </div>
@@ -158,76 +225,76 @@
       </div>
 
       <!-- Calibration Controls & Checklist Grid -->
-      <div class="calibration-panel">
+      <div class="calibration-panel" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
         <!-- Checklist Section -->
-        <div class="panel-card checklist-card">
-          <div class="card-header">
-            <h3>Marked Vital Signs</h3>
-            <span class="count-badge"><span id="markedCount">0</span> / 4</span>
+        <div class="panel-card checklist-card" style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 14px;">
+          <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="font-size: 0.9rem; margin: 0; color: var(--text-primary);">Marked Vital Signs</h3>
+            <span class="count-badge" style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent-spo2);"><span id="markedCount">0</span> / 4</span>
           </div>
-          <ul class="checklist-group" id="checklistGroup">
-            <li class="checklist-item" data-vital="Heart Rate">
-              <div class="item-left">
-                <span class="vital-indicator" style="background-color: #10b981;"></span>
-                <span class="vital-name">Heart Rate</span>
+          <ul class="checklist-group" id="checklistGroup" style="list-style: none; display: flex; flex-direction: column; gap: 6px; padding: 0;">
+            <li class="checklist-item" id="checkHR" data-vital="Heart Rate" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: 4px;">
+              <div class="item-left" style="display: flex; align-items: center; gap: 8px;">
+                <span class="vital-indicator" style="width: 8px; height: 8px; border-radius: 50%; background-color: var(--accent-hr);"></span>
+                <span class="vital-name">Heart Rate (HR)</span>
               </div>
-              <span class="vital-status status-pending">(not yet)</span>
+              <span class="check-status status-pending">(not yet)</span>
             </li>
-            <li class="checklist-item" data-vital="SpO2">
-              <div class="item-left">
-                <span class="vital-indicator" style="background-color: #0284c7;"></span>
-                <span class="vital-name">SpO2</span>
+            <li class="checklist-item" id="checkSpO2" data-vital="SpO2" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: 4px;">
+              <div class="item-left" style="display: flex; align-items: center; gap: 8px;">
+                <span class="vital-indicator" style="width: 8px; height: 8px; border-radius: 50%; background-color: var(--accent-spo2);"></span>
+                <span class="vital-name">SpO2 (Pulse Ox)</span>
               </div>
-              <span class="vital-status status-pending">(not yet)</span>
+              <span class="check-status status-pending">(not yet)</span>
             </li>
-            <li class="checklist-item" data-vital="Blood Pressure">
-              <div class="item-left">
-                <span class="vital-indicator" style="background-color: #d97706;"></span>
-                <span class="vital-name">Blood Pressure</span>
+            <li class="checklist-item" id="checkBP" data-vital="Blood Pressure" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: 4px;">
+              <div class="item-left" style="display: flex; align-items: center; gap: 8px;">
+                <span class="vital-indicator" style="width: 8px; height: 8px; border-radius: 50%; background-color: var(--accent-nibp);"></span>
+                <span class="vital-name">Blood Pressure (NIBP)</span>
               </div>
-              <span class="vital-status status-pending">(not yet)</span>
+              <span class="check-status status-pending">(not yet)</span>
             </li>
-            <li class="checklist-item" data-vital="EtCO2">
-              <div class="item-left">
-                <span class="vital-indicator" style="background-color: #8b5cf6;"></span>
-                <span class="vital-name">EtCO2</span>
+            <li class="checklist-item" id="checkEtCO2" data-vital="EtCO2" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: 4px;">
+              <div class="item-left" style="display: flex; align-items: center; gap: 8px;">
+                <span class="vital-indicator" style="width: 8px; height: 8px; border-radius: 50%; background-color: var(--accent-etco2);"></span>
+                <span class="vital-name">EtCO2 (Capnography)</span>
               </div>
-              <span class="vital-status status-pending">(not yet)</span>
+              <span class="check-status status-pending">(not yet)</span>
             </li>
           </ul>
         </div>
 
         <!-- Actions & Save Section -->
-        <div class="panel-card actions-card">
-          <div class="card-header">
-            <h3>Save & Controls</h3>
+        <div class="panel-card actions-card" style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 14px;">
+          <div class="card-header" style="margin-bottom: 10px;">
+            <h3 style="font-size: 0.9rem; margin: 0; color: var(--text-primary);">Save & Controls</h3>
           </div>
-          <div class="action-buttons-group">
-            <button id="saveBtn" class="btn btn-success w-full" disabled>
-              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <div class="action-buttons-group" style="display: flex; flex-direction: column; gap: 8px;">
+            <button id="saveBtn" class="btn btn-success w-full" style="height: 36px; font-weight: 600;" disabled>
+              <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
                 <polyline points="17 21 17 13 7 13 7 21"/>
                 <polyline points="7 3 7 8 15 8"/>
               </svg>
               Save Calibration
             </button>
-            <button id="downloadBtn" class="btn btn-secondary w-full" disabled>
-              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <button id="downloadBtn" class="btn btn-secondary w-full" style="height: 36px;" disabled>
+              <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/>
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              Download Calibration as File
+              Download Calibration File
             </button>
-            <div class="btn-divider"></div>
-            <div class="secondary-actions-row">
-              <button id="undoBtn" class="btn btn-tertiary" disabled title="Undo last drawn box">
+            <div class="btn-divider" style="height: 1px; background: var(--border-subtle); margin: 4px 0;"></div>
+            <div class="secondary-actions-row" style="display: flex; gap: 8px;">
+              <button id="undoBtn" class="btn btn-tertiary" style="flex: 1; height: 32px;" disabled title="Undo last drawn box">
                 Undo Box
               </button>
-              <button id="resetBtn" class="btn btn-tertiary" disabled title="Reset all boxes">
+              <button id="resetBtn" class="btn btn-tertiary" style="flex: 1; height: 32px;" disabled title="Reset all boxes">
                 Reset All
               </button>
-              <button id="retakeBtn" class="btn btn-tertiary" disabled title="Unfreeze to retake frame">
+              <button id="retakeBtn" class="btn btn-tertiary" style="flex: 1; height: 32px;" disabled title="Unfreeze to retake frame">
                 Retake Feed
               </button>
             </div>
@@ -237,31 +304,31 @@
 
       <!-- Live Monitoring & AI Digitizer Section -->
       <div id="monitoringSection" class="monitoring-section hidden">
-        <div class="panel-card monitoring-card">
-          <div class="card-header monitoring-header">
+        <div class="panel-card monitoring-card" style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 14px;">
+          <div class="card-header monitoring-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <div>
-              <h3>Live Monitor Digitizer</h3>
-              <p class="section-subtext">Real-time vision AI field extraction & rolling median smoothing</p>
+              <h3 style="font-size: 0.95rem; margin: 0; color: var(--text-primary);">Live Monitor Digitizer</h3>
+              <p class="subtitle" style="margin-top: 2px;">Real-time local computer vision extraction & 0-lag median smoothing</p>
             </div>
-            <div class="monitoring-controls">
-              <button id="startMonitoringBtn" class="btn btn-success">
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <div class="monitoring-controls" style="display: flex; gap: 8px; align-items: center;">
+              <button id="startMonitoringBtn" class="btn btn-success" style="height: 34px;">
+                <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polygon points="5 3 19 12 5 21 5 3"></polygon>
                 </svg>
                 Start Monitoring
               </button>
-              <button id="stopMonitoringBtn" class="btn btn-danger hidden">
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <button id="stopMonitoringBtn" class="btn btn-danger hidden" style="height: 34px;">
+                <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="6" y="6" width="12" height="12"></rect>
                 </svg>
                 Stop Monitoring
               </button>
-              <a id="cardDashboardBtn" href="dashboard.html" target="_blank" class="btn btn-primary hidden" style="text-decoration: none;">
-                View Dashboard
+              <a id="cardDashboardBtn" href="dashboard.html" target="_blank" class="btn btn-primary" style="height: 34px; line-height: 34px; padding: 0 12px;">
+                View Live Dashboard
               </a>
-              <div id="monitoringStatusBadge" class="status-badge status-connecting">
-                <span class="status-dot"></span>
-                <span id="monitoringStatusText">Idle</span>
+              <div id="monitoringStatusBadge" class="case-id-badge" style="height: 34px; padding: 0 8px; display: inline-flex; align-items: center; gap: 6px;">
+                <span class="status-dot-indicator" style="width: 7px; height: 7px;"></span>
+                <span id="monitoringStatusText" style="font-size: 0.75rem;">Idle</span>
               </div>
             </div>
           </div>
@@ -271,65 +338,85 @@
             <!-- Heart Rate Readout -->
             <div class="readout-card" data-field="heart_rate">
               <div class="readout-header">
-                <span class="readout-label">Heart Rate</span>
-                <div class="readout-status">
-                  <span class="status-dot-indicator dot-gray" id="dot-heart_rate"></span>
-                  <span class="status-text-indicator" id="status-heart_rate">offline</span>
+                <div class="readout-label-group">
+                  <span class="vital-pulse-dot" id="dot-heart_rate" style="background-color: #34D399;"></span>
+                  <span class="readout-label">Heart Rate</span>
+                </div>
+                <span class="status-text-indicator" id="status-heart_rate">offline</span>
+              </div>
+              <div class="readout-body" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0.2rem 0;">
+                <div class="readout-value-container">
+                  <div class="readout-value" id="smoothed-heart_rate">--</div>
+                  <span id="note-heart_rate" class="holding-note hidden">Holding last reading</span>
+                </div>
+                <div class="crop-preview-box" style="width: 72px; height: 38px; border: 1px solid var(--border-subtle); border-radius: 4px; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center;" title="Live ROI Camera Crop Preview">
+                  <img id="crop-img-heart_rate" style="max-width: 100%; max-height: 100%; object-fit: contain; display: block;" alt="HR Crop">
                 </div>
               </div>
-              <div class="readout-value-container">
-                <div class="readout-value" id="smoothed-heart_rate">--</div>
-                <span id="note-heart_rate" class="holding-note hidden">Holding last reading</span>
-              </div>
-              <div class="readout-sub text-muted">Raw: <span id="raw-heart_rate">--</span></div>
+              <div class="readout-sub text-muted">Raw: <span id="raw-heart_rate">--</span> bpm</div>
             </div>
 
             <!-- SpO2 Readout -->
             <div class="readout-card" data-field="spo2">
               <div class="readout-header">
-                <span class="readout-label">SpO2</span>
-                <div class="readout-status">
-                  <span class="status-dot-indicator dot-gray" id="dot-spo2"></span>
-                  <span class="status-text-indicator" id="status-spo2">offline</span>
+                <div class="readout-label-group">
+                  <span class="vital-pulse-dot" id="dot-spo2" style="background-color: #38BDF8;"></span>
+                  <span class="readout-label">SpO2</span>
+                </div>
+                <span class="status-text-indicator" id="status-spo2">offline</span>
+              </div>
+              <div class="readout-body" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0.2rem 0;">
+                <div class="readout-value-container">
+                  <div class="readout-value" id="smoothed-spo2">--</div>
+                  <span id="note-spo2" class="holding-note hidden">Holding last reading</span>
+                </div>
+                <div class="crop-preview-box" style="width: 72px; height: 38px; border: 1px solid var(--border-subtle); border-radius: 4px; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center;" title="Live ROI Camera Crop Preview">
+                  <img id="crop-img-spo2" style="max-width: 100%; max-height: 100%; object-fit: contain; display: block;" alt="SpO2 Crop">
                 </div>
               </div>
-              <div class="readout-value-container">
-                <div class="readout-value" id="smoothed-spo2">--</div>
-                <span id="note-spo2" class="holding-note hidden">Holding last reading</span>
-              </div>
-              <div class="readout-sub text-muted">Raw: <span id="raw-spo2">--</span></div>
+              <div class="readout-sub text-muted">Raw: <span id="raw-spo2">--</span> %</div>
             </div>
 
             <!-- Blood Pressure Readout -->
             <div class="readout-card" data-field="blood_pressure">
               <div class="readout-header">
-                <span class="readout-label">Blood Pressure</span>
-                <div class="readout-status">
-                  <span class="status-dot-indicator dot-gray" id="dot-blood_pressure"></span>
-                  <span class="status-text-indicator" id="status-blood_pressure">offline</span>
+                <div class="readout-label-group">
+                  <span class="vital-pulse-dot" id="dot-blood_pressure" style="background-color: #F87171;"></span>
+                  <span class="readout-label">NIBP</span>
+                </div>
+                <span class="status-text-indicator" id="status-blood_pressure">offline</span>
+              </div>
+              <div class="readout-body" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0.2rem 0;">
+                <div class="readout-value-container">
+                  <div class="readout-value" id="smoothed-blood_pressure">--</div>
+                  <span id="note-blood_pressure" class="holding-note hidden">Holding last reading</span>
+                </div>
+                <div class="crop-preview-box" style="width: 72px; height: 38px; border: 1px solid var(--border-subtle); border-radius: 4px; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center;" title="Live ROI Camera Crop Preview">
+                  <img id="crop-img-blood_pressure" style="max-width: 100%; max-height: 100%; object-fit: contain; display: block;" alt="NIBP Crop">
                 </div>
               </div>
-              <div class="readout-value-container">
-                <div class="readout-value" id="smoothed-blood_pressure">--</div>
-                <span id="note-blood_pressure" class="holding-note hidden">Holding last reading</span>
-              </div>
-              <div class="readout-sub text-muted">Raw: <span id="raw-blood_pressure">--</span></div>
+              <div class="readout-sub text-muted">Raw: <span id="raw-blood_pressure">--</span> mmHg</div>
             </div>
 
             <!-- EtCO2 Readout -->
             <div class="readout-card" data-field="etco2">
               <div class="readout-header">
-                <span class="readout-label">EtCO2</span>
-                <div class="readout-status">
-                  <span class="status-dot-indicator dot-gray" id="dot-etco2"></span>
-                  <span class="status-text-indicator" id="status-etco2">offline</span>
+                <div class="readout-label-group">
+                  <span class="vital-pulse-dot" id="dot-etco2" style="background-color: #EAB93F;"></span>
+                  <span class="readout-label">EtCO2</span>
+                </div>
+                <span class="status-text-indicator" id="status-etco2">offline</span>
+              </div>
+              <div class="readout-body" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0.2rem 0;">
+                <div class="readout-value-container">
+                  <div class="readout-value" id="smoothed-etco2">--</div>
+                  <span id="note-etco2" class="holding-note hidden">Holding last reading</span>
+                </div>
+                <div class="crop-preview-box" style="width: 72px; height: 38px; border: 1px solid var(--border-subtle); border-radius: 4px; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center;" title="Live ROI Camera Crop Preview">
+                  <img id="crop-img-etco2" style="max-width: 100%; max-height: 100%; object-fit: contain; display: block;" alt="EtCO2 Crop">
                 </div>
               </div>
-              <div class="readout-value-container">
-                <div class="readout-value" id="smoothed-etco2">--</div>
-                <span id="note-etco2" class="holding-note hidden">Holding last reading</span>
-              </div>
-              <div class="readout-sub text-muted">Raw: <span id="raw-etco2">--</span></div>
+              <div class="readout-sub text-muted">Raw: <span id="raw-etco2">--</span> mmHg</div>
             </div>
           </div>
         </div>
@@ -337,6 +424,30 @@
     </main>
   </div>
 
+  <!-- QR Code LAN Link Modal -->
+  <div id="qrCodeModal" class="label-modal-overlay hidden">
+    <div class="label-modal-card" style="max-width: 360px; text-align: center;">
+      <h3 style="font-size: 1rem; color: var(--text-primary);">Open on Mobile / iPad</h3>
+      <p class="subtitle" style="margin-bottom: 0.85rem;">
+        Scan QR code from phone or tablet connected to local LAN:
+      </p>
+      <div id="qrcodeContainer" style="display: flex; justify-content: center; align-items: center; margin: 0 auto 12px; background: #ffffff; padding: 10px; border-radius: 4px; width: 180px; height: 180px;"></div>
+      <div style="background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 6px 10px; margin-bottom: 12px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent-spo2); word-break: break-all;" id="lanUrlDisplay">
+        Fetching Network URL...
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: center;">
+        <button id="copyLanUrlBtn" class="btn btn-secondary btn-sm">Copy Link</button>
+        <button id="closeQrModalBtn" class="btn btn-primary btn-sm">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="aruco.js"></script>
   <script src="app.js"></script>
+  <script>
+    if (window.lucide) {
+      lucide.createIcons();
+    }
+  </script>
 </body>
 </html>

@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project specific excludes
+*.db
+*.sqlite
+*.sqlite3
+HANDOVER.md
+tests/
+scratch/
+*.mp4

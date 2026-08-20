@@ -6,17 +6,19 @@
   <title>Patient Monitor Live Vitals Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=2">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
   <style>
+    /* Direct High-Specificity Medical Dashboard Card System */
     .dashboard-container {
-      max-width: 1180px;
+      max-width: 1100px;
       margin: 0 auto;
-      padding: 2.5rem 2rem 3rem;
+      padding: 1.5rem 1.25rem 3rem;
       display: flex;
       flex-direction: column;
-      gap: 1.5rem;
+      gap: 1.25rem;
     }
 
     .dashboard-header {
@@ -24,173 +26,105 @@
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
-      gap: 1.25rem;
-      border-bottom: 1px solid rgba(150, 174, 194, 0.2);
-      padding-bottom: 1.5rem;
+      gap: 1rem;
+      border-bottom: 1px solid #232B35;
+      padding-bottom: 1rem;
     }
 
     .dashboard-header h1 {
-      font-size: 1.75rem;
+      font-size: 1.35rem;
       font-weight: 600;
-      color: var(--text-main);
+      color: #E4E7EB;
+      letter-spacing: -0.02em;
       display: flex;
       align-items: center;
-      gap: 0.7rem;
-      letter-spacing: -0.035em;
-    }
-
-    .page-title-icon {
-      width: 25px;
-      height: 25px;
-      color: #6ca5bd;
-      flex: 0 0 auto;
-    }
-
-    .dashboard-header-controls {
-      display: flex;
-      align-items: center;
-      gap: 0.65rem;
-      flex-wrap: wrap;
-      justify-content: flex-end;
+      gap: 0.5rem;
     }
 
     .vitals-summary-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1rem;
+      display: grid !important;
+      grid-template-columns: repeat(4, 1fr) !important;
+      gap: 1rem !important;
+      margin-top: 0.5rem !important;
+    }
+
+    @media (max-width: 900px) {
+      .vitals-summary-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    }
+
+    @media (max-width: 480px) {
+      .vitals-summary-grid { grid-template-columns: 1fr !important; }
     }
 
     .vital-stat-card {
-      background-color: var(--surface-card);
-      border: 1px solid rgba(150, 174, 194, 0.2);
-      border-radius: var(--radius-lg);
-      padding: 1.35rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      box-shadow: 0 10px 26px rgba(4, 10, 18, 0.16);
+      background-color: #1A2028 !important;
+      border: 1px solid #232B35 !important;
+      border-radius: 4px !important;
+      padding: 1.1rem 1.25rem !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: space-between !important;
+      gap: 0.5rem !important;
+      min-height: 115px !important;
+      position: relative !important;
     }
 
-    .vital-stat-card.abnormal {
-      border-color: #bd6870;
-      animation: abnormal-border-pulse 1.1s ease-in-out infinite alternate;
-    }
-
-    .abnormal-label {
-      display: none;
-      color: #e5b3b7;
-      background: rgba(184, 93, 99, 0.14);
-      border: 1px solid rgba(184, 93, 99, 0.44);
-      border-radius: var(--radius-sm);
-      padding: 0.2rem 0.4rem;
-      font-size: 0.65rem;
-      line-height: 1;
-      letter-spacing: 0.03em;
-      text-transform: none;
-    }
-
-    .vital-stat-card.abnormal .abnormal-label {
-      display: inline-flex;
-      align-items: center;
-    }
-
-    @keyframes abnormal-border-pulse {
-      from { box-shadow: 0 0 0 1px rgba(189, 104, 112, 0.32), 0 0 8px rgba(189, 104, 112, 0.18); }
-      to { box-shadow: 0 0 0 2px rgba(189, 104, 112, 0.72), 0 0 16px rgba(189, 104, 112, 0.4); }
-    }
+    #cardHR { border-top: 3px solid #34D399 !important; }
+    #cardSpO2 { border-top: 3px solid #38BDF8 !important; }
+    #cardBP { border-top: 3px solid #F87171 !important; }
+    #cardEtCO2 { border-top: 3px solid #EAB93F !important; }
 
     .stat-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.85rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      font-size: 0.75rem !important;
+      font-weight: 600 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.05em !important;
+      color: #8B93A1 !important;
     }
 
     .stat-value {
-      font-size: 2.2rem;
-      font-weight: 800;
-      line-height: 1.1;
-      font-family: var(--font-family);
+      font-family: 'IBM Plex Mono', monospace !important;
+      font-size: 2.2rem !important;
+      font-weight: 600 !important;
+      line-height: 1.1 !important;
+      margin: 0.25rem 0 !important;
     }
+
+    .color-hr { color: #34D399 !important; }
+    .color-spo2 { color: #38BDF8 !important; }
+    .color-bp { color: #F87171 !important; }
+    .color-etco2 { color: #EAB93F !important; }
 
     .stat-unit {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      font-weight: 500;
+      font-size: 0.75rem !important;
+      color: #8B93A1 !important;
     }
-
-    /* Distinct Colors for Medical Vitals */
-    .color-hr { color: #69a992; }
-    .color-spo2 { color: #6ca9c3; }
-    .color-bp { color: #c87a7f; }
-    .color-etco2 { color: #c6ab66; }
-
-    .border-hr { border-top: 3px solid #69a992; }
-    .border-spo2 { border-top: 3px solid #6ca9c3; }
-    .border-bp { border-top: 3px solid #c87a7f; }
-    .border-etco2 { border-top: 3px solid #c6ab66; }
 
     .chart-card {
-      background-color: var(--surface-card);
-      border: 1px solid rgba(150, 174, 194, 0.2);
-      border-radius: var(--radius-lg);
-      padding: 1.5rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      min-height: 480px;
-      box-shadow: 0 10px 26px rgba(4, 10, 18, 0.16);
+      background-color: #1A2028 !important;
+      border: 1px solid #232B35 !important;
+      border-radius: 4px !important;
+      padding: 1.25rem !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 1rem !important;
     }
 
-    .chart-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .chart-title {
-      font-size: 1rem;
-      font-weight: 600;
-      color: var(--text-main);
-    }
-
-    .chart-wrapper {
-      position: relative;
-      flex: 1;
-      width: 100%;
-      min-height: 380px;
-    }
-
-    .poll-indicator {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      font-size: 0.8rem;
-      color: var(--text-muted);
-    }
-
-    .poll-dot {
-      width: 8px;
-      height: 8px;
+    .vital-pulse-dot {
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
-      background-color: #4b9b84;
-      box-shadow: 0 0 0 3px rgba(75, 155, 132, 0.12);
-      animation: pulse 2s infinite;
+      display: inline-block;
+      opacity: 1;
+      animation: statusPulse 1.5s ease-in-out infinite;
     }
 
-    @keyframes pulse {
-      0% { opacity: 0.55; }
-      50% { opacity: 1; }
-      100% { opacity: 0.55; }
-    }
-
-    @media (max-width: 760px) {
-      .dashboard-container { padding: 1.25rem 1rem 2rem; }
-      .dashboard-header-controls { justify-content: flex-start; }
-      .chart-header { align-items: flex-start; flex-direction: column; gap: 0.35rem; }
+    @keyframes statusPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.85); }
     }
   </style>
 </head>
@@ -200,20 +134,20 @@
     <header class="dashboard-header">
       <div>
         <h1>
-          <svg class="page-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg>
+          <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38BDF8" stroke-width="2"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg>
           Live Vitals Monitoring Dashboard
         </h1>
-        <p class="subtitle">Real-time medical monitor trends & automated digitizer analytics</p>
+        <p class="subtitle">Real-time clinical monitor trends & automated digitizer analytics</p>
       </div>
 
-      <div class="dashboard-header-controls">
+      <div class="dashboard-header-controls" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
         <div class="case-id-badge">
-          <span class="case-id-label">Case:</span>
+          <span>Case:</span>
           <span id="caseIdDisplay" class="case-id-val">Loading...</span>
         </div>
-        <div class="poll-indicator">
-          <span class="poll-dot"></span>
-          <span id="pollStatusText">Polling (3s)</span>
+        <div class="case-id-badge">
+          <span class="vital-pulse-dot" style="background-color: #34D399;"></span>
+          <span id="pollStatusText" style="font-size: 0.75rem;">Polling (3s)</span>
         </div>
         <a id="downloadReportBtn" href="#" class="btn btn-success btn-sm" target="_blank" title="Download PDF Anaesthesia Chart">
           Download PDF Report
@@ -225,13 +159,15 @@
       </div>
     </header>
 
-    <!-- Summary Stat Cards -->
+    <!-- Summary Stat Cards Grid -->
     <section class="vitals-summary-grid">
       <!-- Heart Rate Card -->
-      <div class="vital-stat-card border-hr" id="cardHR">
-        <div class="stat-header color-hr">
-          <span>Heart Rate</span>
-          <span>HR</span>
+      <div class="vital-stat-card" id="cardHR">
+        <div class="stat-header">
+          <div class="readout-label-group">
+            <span class="vital-pulse-dot" style="background-color: #34D399;"></span>
+            <span>Heart Rate</span>
+          </div>
           <span class="abnormal-label">Abnormal</span>
         </div>
         <div class="stat-value color-hr" id="valHR">--</div>
@@ -239,10 +175,12 @@
       </div>
 
       <!-- SpO2 Card -->
-      <div class="vital-stat-card border-spo2" id="cardSpO2">
-        <div class="stat-header color-spo2">
-          <span>SpO2</span>
-          <span>Oxygen</span>
+      <div class="vital-stat-card" id="cardSpO2">
+        <div class="stat-header">
+          <div class="readout-label-group">
+            <span class="vital-pulse-dot" style="background-color: #38BDF8;"></span>
+            <span>SpO2</span>
+          </div>
           <span class="abnormal-label">Abnormal</span>
         </div>
         <div class="stat-value color-spo2" id="valSpO2">--</div>
@@ -250,20 +188,25 @@
       </div>
 
       <!-- Blood Pressure Card -->
-      <div class="vital-stat-card border-bp">
-        <div class="stat-header color-bp">
-          <span>Blood Pressure</span>
-          <span>BP (Sys)</span>
+      <div class="vital-stat-card" id="cardBP">
+        <div class="stat-header">
+          <div class="readout-label-group">
+            <span class="vital-pulse-dot" style="background-color: #F87171;"></span>
+            <span>NIBP (Sys/Dia)</span>
+          </div>
+          <span class="abnormal-label">Abnormal</span>
         </div>
         <div class="stat-value color-bp" id="valBP">--</div>
-        <div class="stat-unit">Systolic / Diastolic (mmHg)</div>
+        <div class="stat-unit">Millimeters of Mercury (mmHg)</div>
       </div>
 
       <!-- EtCO2 Card -->
-      <div class="vital-stat-card border-etco2" id="cardEtCO2">
-        <div class="stat-header color-etco2">
-          <span>EtCO2</span>
-          <span>Capnography</span>
+      <div class="vital-stat-card" id="cardEtCO2">
+        <div class="stat-header">
+          <div class="readout-label-group">
+            <span class="vital-pulse-dot" style="background-color: #EAB93F;"></span>
+            <span>EtCO2</span>
+          </div>
           <span class="abnormal-label">Abnormal</span>
         </div>
         <div class="stat-value color-etco2" id="valEtCO2">--</div>
@@ -274,10 +217,10 @@
     <!-- Main Chart Card -->
     <section class="chart-card">
       <div class="chart-header">
-        <h2 class="chart-title">Patient Vital Signs Trend Analysis</h2>
-        <span class="text-muted" style="font-size: 0.85rem;">Live Multi-Parametric Waveform</span>
+        <h2 style="font-size: 0.95rem; font-weight: 600; color: #E4E7EB;">Patient Vital Signs Trend Analysis</h2>
+        <span class="subtitle">Live Multi-Parametric Waveform</span>
       </div>
-      <div class="chart-wrapper">
+      <div class="chart-wrapper" style="position: relative; width: 100%; min-height: 380px;">
         <canvas id="vitalsChart"></canvas>
       </div>
     </section>
@@ -293,11 +236,14 @@
       const pollStatusText = document.getElementById('pollStatusText');
       const cardHR = document.getElementById('cardHR');
       const cardSpO2 = document.getElementById('cardSpO2');
+      const cardBP = document.getElementById('cardBP');
       const cardEtCO2 = document.getElementById('cardEtCO2');
 
       function setAbnormalState(card, isAbnormal) {
-        card.classList.toggle('abnormal', isAbnormal);
+        if (card) card.classList.toggle('abnormal', isAbnormal);
       }
+
+      const API_BASE = window.location.origin;
 
       // Extract case_id from URL query params
       const urlParams = new URLSearchParams(window.location.search);
@@ -306,7 +252,7 @@
       // Fallback: Fetch active case from backend if no query param provided
       if (!caseId) {
         try {
-          const activeResp = await fetch('http://localhost:8000/active-case');
+          const activeResp = await fetch(`${API_BASE}/active-case`);
           if (activeResp.ok) {
             const activeData = await activeResp.json();
             if (activeData && activeData.case_id) {
@@ -330,14 +276,14 @@
       const viewHtmlReportBtn = document.getElementById('viewHtmlReportBtn');
 
       if (downloadReportBtn) {
-        downloadReportBtn.href = `http://localhost:8000/case/${encodeURIComponent(caseId)}/report`;
+        downloadReportBtn.href = `${API_BASE}/case/${encodeURIComponent(caseId)}/report`;
         downloadReportBtn.classList.remove('disabled');
         downloadReportBtn.style.pointerEvents = 'auto';
         downloadReportBtn.style.opacity = '1';
       }
 
       if (viewHtmlReportBtn) {
-        viewHtmlReportBtn.href = `http://localhost:8000/case/${encodeURIComponent(caseId)}/report-html`;
+        viewHtmlReportBtn.href = `${API_BASE}/case/${encodeURIComponent(caseId)}/report-html`;
       }
 
       // Initialize Chart.js Chart
@@ -349,211 +295,186 @@
           datasets: [
             {
               label: 'Heart Rate (bpm)',
-              borderColor: '#22c55e',
-              backgroundColor: 'rgba(34, 197, 94, 0.1)',
+              borderColor: '#34D399',
+              backgroundColor: 'rgba(52, 211, 153, 0.1)',
               data: [],
-              borderWidth: 3,
+              borderWidth: 2,
               tension: 0.3,
-              pointRadius: 4,
-              pointHoverRadius: 6,
+              pointRadius: 3,
+              pointHoverRadius: 5,
               spanGaps: true
             },
             {
               label: 'SpO2 (%)',
-              borderColor: '#38bdf8',
+              borderColor: '#38BDF8',
               backgroundColor: 'rgba(56, 189, 248, 0.1)',
               data: [],
-              borderWidth: 3,
+              borderWidth: 2,
               tension: 0.3,
-              pointRadius: 4,
-              pointHoverRadius: 6,
+              pointRadius: 3,
+              pointHoverRadius: 5,
               spanGaps: true
             },
             {
               label: 'Blood Pressure (Systolic)',
-              borderColor: '#f87171',
+              borderColor: '#F87171',
               backgroundColor: 'rgba(248, 113, 113, 0.1)',
               data: [],
-              borderWidth: 3,
+              borderWidth: 2,
               tension: 0.3,
-              pointRadius: 4,
-              pointHoverRadius: 6,
+              pointRadius: 3,
+              pointHoverRadius: 5,
               spanGaps: true
             },
             {
               label: 'EtCO2 (mmHg)',
-              borderColor: '#facc15',
-              backgroundColor: 'rgba(250, 204, 21, 0.1)',
+              borderColor: '#EAB93F',
+              backgroundColor: 'rgba(234, 185, 63, 0.1)',
               data: [],
-              borderWidth: 3,
+              borderWidth: 2,
               tension: 0.3,
-              pointRadius: 4,
-              pointHoverRadius: 6,
+              pointRadius: 3,
+              pointHoverRadius: 5,
               spanGaps: true
             },
             {
               label: 'Abnormal reading',
               type: 'scatter',
-              borderColor: '#ef4444',
-              backgroundColor: '#ef4444',
-              pointBackgroundColor: '#ef4444',
-              pointBorderColor: '#ffffff',
-              pointBorderWidth: 2,
-              pointRadius: 7,
-              pointHoverRadius: 9,
+              borderColor: '#EF4444',
+              backgroundColor: '#EF4444',
+              data: [],
+              pointRadius: 6,
+              pointHoverRadius: 8,
               pointStyle: 'triangle',
-              showLine: false,
-              data: []
+              showLine: false
             }
           ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          interaction: {
-            mode: 'index',
-            intersect: false
-          },
+          animation: false,
           plugins: {
             legend: {
-              display: true,
-              position: 'top',
               labels: {
-                color: '#f8fafc',
-                font: {
-                  family: 'Inter, sans-serif',
-                  size: 13,
-                  weight: '600'
-                },
-                padding: 20,
-                usePointStyle: true,
-                pointStyle: 'circle'
+                color: '#8B93A1',
+                font: { family: 'IBM Plex Sans', size: 12 }
               }
-            },
-            tooltip: {
-              backgroundColor: '#1e293b',
-              titleColor: '#f8fafc',
-              bodyColor: '#cbd5e1',
-              borderColor: '#334155',
-              borderWidth: 1,
-              padding: 12,
-              cornerRadius: 8
             }
           },
           scales: {
             x: {
-              title: {
-                display: true,
-                text: 'Timestamp',
-                color: '#94a3b8',
-                font: { family: 'Inter', size: 12, weight: '600' }
-              },
-              grid: {
-                color: 'rgba(51, 65, 85, 0.5)'
-              },
-              ticks: {
-                color: '#94a3b8',
-                font: { family: 'Inter', size: 11 }
-              }
+              grid: { color: '#232B35' },
+              ticks: { color: '#8B93A1', font: { family: 'IBM Plex Mono', size: 10 } }
             },
             y: {
-              title: {
-                display: true,
-                text: 'Measurement Value',
-                color: '#94a3b8',
-                font: { family: 'Inter', size: 12, weight: '600' }
-              },
-              min: 0,
-              max: 250,
-              grid: {
-                color: 'rgba(51, 65, 85, 0.5)'
-              },
-              ticks: {
-                color: '#94a3b8',
-                font: { family: 'Inter', size: 11 }
-              }
+              grid: { color: '#232B35' },
+              ticks: { color: '#8B93A1', font: { family: 'IBM Plex Mono', size: 11 } }
             }
           }
         }
       });
 
-      // Poll backend every 1 seconds for updated readings & case status
-      async function fetchReadings() {
+      async function fetchLatestReadings() {
         try {
-          const response = await fetch(`http://localhost:8000/case/${encodeURIComponent(caseId)}/readings`);
-          if (!response.ok) return;
-
-          const data = await response.json();
-          const readings = data.readings || [];
-
-          if (readings.length === 0) return;
+          const resp = await fetch(`${API_BASE}/case/${encodeURIComponent(caseId)}/readings`);
+          if (!resp.ok) return;
+          const rawData = await resp.json();
+          const readings = Array.isArray(rawData) ? rawData : (rawData.readings || []);
+          if (!Array.isArray(readings) || readings.length === 0) {
+            pollStatusText.textContent = `Polling (3s) • 0 readings`;
+            return;
+          }
 
           const labels = [];
           const hrData = [];
           const spo2Data = [];
-          const bpData = [];
+          const bpSysData = [];
           const etco2Data = [];
-          const abnormalPoints = [];
+          const abnormalData = [];
+
+          let latestHR = '--';
+          let latestSpO2 = '--';
+          let latestBP = '--';
+          let latestEtCO2 = '--';
+
+          let isHRAbnormal = false;
+          let isSpO2Abnormal = false;
+          let isEtCO2Abnormal = false;
+          let isBPAbnormal = false;
 
           readings.forEach(r => {
-            let timeLabel = r.timestamp;
-            try {
-              const d = new Date(r.timestamp);
-              timeLabel = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            } catch (e) {}
-
+            const timeObj = typeof r.timestamp === 'number' ? new Date(r.timestamp * 1000) : new Date(r.timestamp);
+            const timeLabel = isNaN(timeObj.getTime()) ? 'Live' : timeObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             labels.push(timeLabel);
-            hrData.push(r.heart_rate !== null ? r.heart_rate : null);
-            spo2Data.push(r.spo2 !== null ? r.spo2 : null);
-            bpData.push(r.bp_systolic !== null ? r.bp_systolic : null);
-            etco2Data.push(r.etco2 !== null ? r.etco2 : null);
 
-            if (r.heart_rate !== null && (r.heart_rate > 120 || r.heart_rate < 50)) {
-              abnormalPoints.push({ x: timeLabel, y: r.heart_rate });
+            const hr = r.heart_rate !== null && r.heart_rate !== undefined ? r.heart_rate : null;
+            const spo2 = r.spo2 !== null && r.spo2 !== undefined ? r.spo2 : null;
+            const etco2 = r.etco2 !== null && r.etco2 !== undefined ? r.etco2 : null;
+
+            let bpSys = null;
+            let bpStr = null;
+            if (r.bp_systolic !== null && r.bp_systolic !== undefined) {
+              bpSys = r.bp_systolic;
+              const dia = r.bp_diastolic !== null && r.bp_diastolic !== undefined ? r.bp_diastolic : 80;
+              bpStr = `${Math.round(bpSys)}/${Math.round(dia)}`;
+            } else if (r.blood_pressure) {
+              bpStr = String(r.blood_pressure);
+              const parts = bpStr.split('/');
+              if (parts.length > 0 && !isNaN(parseFloat(parts[0]))) {
+                bpSys = parseFloat(parts[0]);
+              }
             }
-            if (r.spo2 !== null && r.spo2 < 92) {
-              abnormalPoints.push({ x: timeLabel, y: r.spo2 });
+
+            hrData.push(hr);
+            spo2Data.push(spo2);
+            bpSysData.push(bpSys);
+            etco2Data.push(etco2);
+
+            const hrAbnormal = hr !== null && (hr < 50 || hr > 120);
+            const spo2Abnormal = spo2 !== null && (spo2 < 90);
+            const etco2Abnormal = etco2 !== null && (etco2 < 30 || etco2 > 45);
+            const bpAbnormal = bpSys !== null && (bpSys < 90 || bpSys > 140);
+
+            if (hrAbnormal || spo2Abnormal || etco2Abnormal || bpAbnormal) {
+              abnormalData.push({ x: timeLabel, y: hr || spo2 || bpSys || etco2 });
+            } else {
+              abnormalData.push(null);
             }
-            if (r.etco2 !== null && (r.etco2 < 30 || r.etco2 > 45)) {
-              abnormalPoints.push({ x: timeLabel, y: r.etco2 });
-            }
+
+            if (hr !== null) { latestHR = Math.round(hr); isHRAbnormal = hrAbnormal; }
+            if (spo2 !== null) { latestSpO2 = Math.round(spo2); isSpO2Abnormal = spo2Abnormal; }
+            if (bpStr !== null) { latestBP = bpStr; isBPAbnormal = bpAbnormal; }
+            if (etco2 !== null) { latestEtCO2 = Math.round(etco2); isEtCO2Abnormal = etco2Abnormal; }
           });
 
-          // Update Summary Stat Cards with latest reading
-          const latest = readings[readings.length - 1];
-          valHR.textContent = latest.heart_rate !== null ? Math.round(latest.heart_rate) : '--';
-          valSpO2.textContent = latest.spo2 !== null ? Math.round(latest.spo2) : '--';
-          
-          if (latest.bp_systolic !== null && latest.bp_diastolic !== null) {
-            valBP.textContent = `${Math.round(latest.bp_systolic)}/${Math.round(latest.bp_diastolic)}`;
-          } else {
-            valBP.textContent = '--';
-          }
-          
-          valEtCO2.textContent = latest.etco2 !== null ? Math.round(latest.etco2) : '--';
+          valHR.textContent = latestHR;
+          valSpO2.textContent = latestSpO2;
+          valBP.textContent = latestBP;
+          valEtCO2.textContent = latestEtCO2;
 
-          // Display-only threshold checks; source readings and backend state stay unchanged.
-          setAbnormalState(cardHR, latest.heart_rate !== null && (latest.heart_rate > 120 || latest.heart_rate < 50));
-          setAbnormalState(cardSpO2, latest.spo2 !== null && latest.spo2 < 92);
-          setAbnormalState(cardEtCO2, latest.etco2 !== null && (latest.etco2 < 30 || latest.etco2 > 45));
+          setAbnormalState(cardHR, isHRAbnormal);
+          setAbnormalState(cardSpO2, isSpO2Abnormal);
+          setAbnormalState(cardBP, isBPAbnormal);
+          setAbnormalState(cardEtCO2, isEtCO2Abnormal);
 
-          // Update Chart Data
           vitalsChart.data.labels = labels;
           vitalsChart.data.datasets[0].data = hrData;
           vitalsChart.data.datasets[1].data = spo2Data;
-          vitalsChart.data.datasets[2].data = bpData;
+          vitalsChart.data.datasets[2].data = bpSysData;
           vitalsChart.data.datasets[3].data = etco2Data;
-          vitalsChart.data.datasets[4].data = abnormalPoints;
-          vitalsChart.update('none');
+          vitalsChart.data.datasets[4].data = abnormalData;
+          vitalsChart.update();
 
+          pollStatusText.textContent = `Polling (3s) • ${readings.length} cycles`;
         } catch (err) {
-          console.error('Error fetching case readings:', err);
+          console.error('Error fetching dashboard readings:', err);
+          pollStatusText.textContent = 'Connection Error';
         }
       }
 
-      // Initial fetch + 1-second polling interval for instant chart updates
-      fetchReadings();
-      setInterval(fetchReadings, 1000);
+      fetchLatestReadings();
+      setInterval(fetchLatestReadings, 3000);
     });
   </script>
 </body>
