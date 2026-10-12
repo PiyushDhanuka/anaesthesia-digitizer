@@ -3,10 +3,5 @@ uvicorn
 firebase-admin
 python-multipart
 pillow
-python-dotenv
-reportlab
 numpy
 opencv-python-headless
-rapidocr-onnxruntime
-matplotlib
-google-genai
