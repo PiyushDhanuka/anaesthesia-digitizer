@@ -283,8 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const defaultCalib = getDefaultDemoCalibration();
       localStorage.setItem('monitorCalibration', JSON.stringify(defaultCalib));
     }
-    showMonitoringSection();
-    startMonitoring();
 
     const simCanvas = document.createElement('canvas');
     simCanvas.width = TARGET_WIDTH;
@@ -1333,7 +1331,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const savedData = JSON.parse(savedStr);
         if (savedData && savedData.regions) {
           console.log('Saved monitor calibration found in localStorage:', savedData);
-          showMonitoringSection();
         }
       }
     } catch (e) {

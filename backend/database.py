@@ -1,69 +1,26 @@
-from contextlib import contextmanager
 from datetime import datetime, timezone
 import os
-import sqlite3
 import time
 from typing import Any, Dict, List, Optional
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "monitoring.db")
+import firebase_admin
+from firebase_admin import credentials, firestore
 
+# --- FIREBASE INITIALIZATION ---
+current_dir = os.path.dirname(os.path.abspath(__file__))
+cred_path = os.path.join(current_dir, "firebase_key.json")
 
-@contextmanager
-def get_db_connection():
-    """Context manager for SQLite database connection that guarantees closing."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
+if not firebase_admin._apps:
+    cred = credentials.Certificate(cred_path)
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+print("[DB] Running 100% on Firebase Firestore")
 
 
 def init_db():
-    """Creates the SQLite database file and tables on first run, applying column migrations."""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS cases (
-                case_id TEXT PRIMARY KEY,
-                started_at TEXT NOT NULL,
-                ended_at TEXT,
-                status TEXT NOT NULL,
-                patient_id TEXT,
-                anesthetist_id TEXT,
-                or_room TEXT
-            );
-        """)
-        # Fallback migration check for existing monitoring.db files
-        cursor.execute("PRAGMA table_info(cases);")
-        existing_cols = {row["name"] for row in cursor.fetchall()}
-        for col_name in ["patient_id", "anesthetist_id", "or_room"]:
-            if col_name not in existing_cols:
-                cursor.execute(f"ALTER TABLE cases ADD COLUMN {col_name} TEXT;")
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS readings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                case_id TEXT NOT NULL,
-                timestamp TEXT NOT NULL,
-                heart_rate REAL,
-                spo2 REAL,
-                bp_systolic REAL,
-                bp_diastolic REAL,
-                etco2 REAL,
-                FOREIGN KEY (case_id) REFERENCES cases(case_id)
-            );
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS ground_truth (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                case_id TEXT,
-                field TEXT NOT NULL,
-                value REAL NOT NULL,
-                timestamp TEXT NOT NULL
-            );
-        """)
-        conn.commit()
+    """No-op for NoSQL. Kept so main.py doesn't crash on import."""
+    pass
 
 
 def create_case(
@@ -71,16 +28,20 @@ def create_case(
     anesthetist_id: Optional[str] = None,
     or_room: Optional[str] = None
 ) -> str:
-    """Creates a new case record with status 'active' and optional metadata."""
+    """Creates a new case document in the 'cases' collection."""
     now_iso = datetime.now(timezone.utc).isoformat()
     case_id = f"case_{int(time.time() * 1000)}"
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO cases (case_id, started_at, ended_at, status, patient_id, anesthetist_id, or_room) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (case_id, now_iso, None, "active", patient_id, anesthetist_id, or_room)
-        )
-        conn.commit()
+    
+    doc_data = {
+        "case_id": case_id,
+        "started_at": now_iso,
+        "ended_at": None,
+        "status": "active",
+        "patient_id": patient_id,
+        "anesthetist_id": anesthetist_id,
+        "or_room": or_room
+    }
+    db.collection("cases").document(case_id).set(doc_data)
     return case_id
 
 
@@ -92,104 +53,87 @@ def save_reading(
     bp_diastolic: Optional[float] = None,
     etco2: Optional[float] = None
 ):
-    """Saves a vital signs reading for a case."""
+    """Saves a reading to cases -> case_id -> readings subcollection."""
     now_iso = datetime.now(timezone.utc).isoformat()
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO readings 
-            (case_id, timestamp, heart_rate, spo2, bp_systolic, bp_diastolic, etco2)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (case_id, now_iso, heart_rate, spo2, bp_systolic, bp_diastolic, etco2)
-        )
-        conn.commit()
+    doc_data = {
+        "case_id": case_id,
+        "timestamp": now_iso,
+        "heart_rate": heart_rate,
+        "spo2": spo2,
+        "bp_systolic": bp_systolic,
+        "bp_diastolic": bp_diastolic,
+        "etco2": etco2
+    }
+    db.collection("cases").document(case_id).collection("readings").add(doc_data)
 
 
 def end_case(case_id: str):
-    """Marks a case as ended with the current ISO timestamp."""
+    """Marks a case as ended."""
     now_iso = datetime.now(timezone.utc).isoformat()
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE cases SET status = ?, ended_at = ? WHERE case_id = ?",
-            ("ended", now_iso, case_id)
-        )
-        conn.commit()
+    db.collection("cases").document(case_id).update({
+        "status": "ended",
+        "ended_at": now_iso
+    })
 
 
 def get_case_readings(case_id: str) -> List[Dict[str, Any]]:
-    """Returns all readings for a case ordered by timestamp."""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, case_id, timestamp, heart_rate, spo2, bp_systolic, bp_diastolic, etco2 FROM readings WHERE case_id = ? ORDER BY timestamp ASC",
-            (case_id,)
-        )
-        rows = cursor.fetchall()
-        return [dict(row) for row in rows]
+    """Returns all readings for a case, ordered chronologically."""
+    docs = db.collection("cases").document(case_id).collection("readings")\
+             .order_by("timestamp", direction=firestore.Query.ASCENDING).stream()
+    
+    readings = []
+    for doc in docs:
+        data = doc.to_dict()
+        data["id"] = doc.id  # Map Firestore doc ID to the expected 'id' field
+        readings.append(data)
+    return readings
 
 
 def get_active_case() -> Optional[str]:
-    """Returns the currently active case_id if one exists, else None."""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT case_id FROM cases WHERE status = 'active' ORDER BY started_at DESC LIMIT 1"
-        )
-        row = cursor.fetchone()
-        return row["case_id"] if row else None
+    """Finds the active case. Sorted locally to avoid Firestore missing index errors."""
+    docs = db.collection("cases").where("status", "==", "active").stream()
+    active_cases = [doc.to_dict() for doc in docs]
+    
+    if not active_cases:
+        return None
+        
+    # Sort descending by started_at and grab the first one
+    active_cases.sort(key=lambda x: x.get("started_at", ""), reverse=True)
+    return active_cases[0].get("case_id")
 
 
 def get_latest_case() -> Optional[str]:
-    """Returns the most recent case_id created in the database."""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT case_id FROM cases ORDER BY started_at DESC LIMIT 1"
-        )
-        row = cursor.fetchone()
-        return row["case_id"] if row else None
+    """Returns the most recently created case."""
+    docs = db.collection("cases").order_by("started_at", direction=firestore.Query.DESCENDING).limit(1).stream()
+    for doc in docs:
+        return doc.to_dict().get("case_id")
+    return None
 
 
 def get_case(case_id: str) -> Optional[Dict[str, Any]]:
-    """Returns metadata for a specific case_id."""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT case_id, started_at, ended_at, status, patient_id, anesthetist_id, or_room FROM cases WHERE case_id = ?",
-            (case_id,)
-        )
-        row = cursor.fetchone()
-        return dict(row) if row else None
+    """Returns metadata for a specific case."""
+    doc = db.collection("cases").document(case_id).get()
+    return doc.to_dict() if doc.exists else None
 
 
 def save_ground_truth_db(field: str, value: Any, timestamp: str, case_id: Optional[str] = None):
-    """Saves a ground truth entry in SQLite database."""
-    init_db()
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO ground_truth (case_id, field, value, timestamp) VALUES (?, ?, ?, ?)",
-            (case_id, field, float(value) if value is not None else 0.0, timestamp)
-        )
-        conn.commit()
+    """Saves a ground truth entry to the 'ground_truth' collection."""
+    doc_data = {
+        "case_id": case_id,
+        "field": field,
+        "value": float(value) if value is not None else 0.0,
+        "timestamp": timestamp
+    }
+    db.collection("ground_truth").add(doc_data)
 
 
 def get_ground_truth_db(case_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Returns all ground truth entries from SQLite database."""
-    init_db()
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        if case_id:
-            cursor.execute("SELECT field, value, timestamp FROM ground_truth WHERE case_id = ? ORDER BY timestamp ASC", (case_id,))
-        else:
-            cursor.execute("SELECT field, value, timestamp FROM ground_truth ORDER BY timestamp ASC")
-        rows = cursor.fetchall()
-        return [dict(row) for row in rows]
-
-
-# Initialize database schema on module load
-init_db()
-
+    """Retrieves ground truth entries. Sorted locally to avoid index errors."""
+    if case_id:
+        docs = db.collection("ground_truth").where("case_id", "==", case_id).stream()
+    else:
+        docs = db.collection("ground_truth").stream()
+        
+    rows = [doc.to_dict() for doc in docs]
+    rows.sort(key=lambda x: x.get("timestamp", ""))
+    return rows

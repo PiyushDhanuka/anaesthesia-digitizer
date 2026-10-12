@@ -1,4 +1,5 @@
 from datetime import datetime
+from html import escape as html_escape
 import base64
 import io
 from typing import Any, Dict, List, Optional
@@ -7,6 +8,11 @@ try:
     from database import get_case, get_case_readings
 except ImportError:
     from backend.database import get_case, get_case_readings
+
+try:
+    from ai_summary import get_case_summary
+except ImportError:
+    from backend.ai_summary import get_case_summary
 
 
 def _calc_stats(values: List[float]) -> Dict[str, Optional[float]]:
@@ -138,6 +144,7 @@ def generate_report_html(case_id: str) -> str:
     abnormal_events = [(r, _abnormal_parameters(r)) for r in readings]
     abnormal_events = [(r, alerts) for r, alerts in abnormal_events if alerts]
     trend_chart_uri = _generate_trend_chart_data_uri(readings)
+    case_summary = get_case_summary(case_id, readings)
 
     rows_html = ""
     for idx, r in enumerate(readings, 1):
@@ -406,6 +413,12 @@ def generate_report_html(case_id: str) -> str:
         <div class="alert-summary">⚠ Abnormal events detected: {len(abnormal_events)} reading{'s' if len(abnormal_events) != 1 else ''}</div>
     </div>
 
+    <div class="section-title">Case Narrative Summary</div>
+    <div class="summary-card">
+        <div style="font-size: 12px; line-height: 1.5;">{html_escape(case_summary['text'])}</div>
+        <div style="margin-top: 6px; color: #64748b; font-size: 10px;">Source: {html_escape(case_summary['source'])}. Generated from the recorded readings; clinician review required.</div>
+    </div>
+
     {f'''<div class="section-title">Vital Signs Trend</div><div class="trend-chart-card"><img src="{trend_chart_uri}" alt="Vital signs trend chart"></div>''' if trend_chart_uri else ''}
 
     <div class="section-title">Detailed Time-Series Vitals Log</div>
@@ -569,6 +582,15 @@ def generate_report_pdf(case_id: str) -> bytes:
     )
     event_count = len(abnormal_events)
     story.append(Paragraph(f"<b>ALERT:</b> {event_count} abnormal reading{'s' if event_count != 1 else ''} detected.", alert_summary_style))
+
+    case_summary = get_case_summary(case_id, readings)
+    story.append(Paragraph("Case Narrative Summary", section_style))
+    story.append(Paragraph(html_escape(case_summary["text"]), styles['Normal']))
+    story.append(Spacer(1, 3))
+    story.append(Paragraph(
+        f"<font size=8 color='#64748b'>Source: {html_escape(case_summary['source'])}. Generated from the recorded readings; clinician review required.</font>",
+        styles['Normal']))
+    story.append(Spacer(1, 10))
 
     # Embed Vital Signs Trend Chart Image into ReportLab PDF
     trend_chart_uri = _generate_trend_chart_data_uri(readings)

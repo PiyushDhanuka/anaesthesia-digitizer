@@ -100,7 +100,9 @@
   </div>
 
   <script>
-    const API_BASE = window.location.origin;
+    const API_BASE = (window.location.protocol && window.location.protocol.startsWith('http') && window.location.origin && window.location.origin !== 'null')
+      ? window.location.origin
+      : 'http://localhost:8000';
     let autoRefreshInterval = null;
 
     async function fetchVerificationReport() {

@@ -11,13 +11,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script>
-    // Automatic mobile/tablet redirect to Live Clinical Dashboard
-    (function() {
-      var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth < 768 && !window.location.search.includes('desktop=true'));
-      if (isMobile && !window.location.search.includes('setup=true')) {
-        window.location.href = 'dashboard.html';
-      }
-    })();
+    // Mobile/tablet helper script (redirect disabled for desktop split-screen compatibility)
   </script>
   <style>
     /* Direct High-Specificity Component Alignment Overrides */
@@ -50,6 +44,99 @@
     }
   </style>
 </head>
+<!-- Firebase App & Auth SDK (v10 compat for zero-build-step HTML) -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+
+<div id="auth-modal" style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.95);display:flex;align-items:center;justify-content:center;z-index:9999;font-family:sans-serif;">
+  <div style="background:#1e293b;padding:32px;border-radius:12px;border:1px solid #334155;width:360px;color:#f8fafc;">
+    <h3 style="margin-top:0;margin-bottom:6px;">Clinical Access Portal</h3>
+    <p style="font-size:12px;color:#94a3b8;margin-bottom:18px;">Sign in to continue, or use locally without an account.</p>
+    <!-- Checking auth state spinner -->
+    <div id="auth-checking" style="text-align:center;padding:10px 0 14px;color:#94a3b8;font-size:13px;">
+      ⏳ Checking session...
+    </div>
+    <!-- Login form (hidden until auth check completes) -->
+    <div id="auth-form" style="display:none;">
+      <input id="auth-email" type="email" placeholder="Email" value="dr.sharma@hospital.org" style="width:100%;padding:10px;margin-bottom:10px;border-radius:6px;border:1px solid #475569;background:#0f172a;color:#fff;box-sizing:border-box;">
+      <input id="auth-password" type="password" placeholder="Password" value="Hospital@123" style="width:100%;padding:10px;margin-bottom:14px;border-radius:6px;border:1px solid #475569;background:#0f172a;color:#fff;box-sizing:border-box;">
+      <button id="auth-btn" onclick="loginDoctor()" style="width:100%;padding:10px;border-radius:6px;background:#2563eb;color:#fff;border:none;font-weight:bold;cursor:pointer;margin-bottom:10px;">Sign In</button>
+      <button onclick="dismissAuthModal()" style="width:100%;padding:9px;border-radius:6px;background:transparent;color:#64748b;border:1px solid #334155;cursor:pointer;font-size:12px;">Continue Without Sign-In (Local Use)</button>
+      <p id="auth-err" style="color:#ef4444;font-size:12px;margin-top:10px;display:none;"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyBm34aD2wFGHBAMwvPQQwPYebd_dHWMrEM",
+    authDomain: "anaesthesia-digitizer.firebaseapp.com",
+    projectId: "anaesthesia-digitizer",
+    storageBucket: "anaesthesia-digitizer.firebasestorage.app",
+    messagingSenderId: "1085425004426",
+    appId: "1:1085425004426:web:d9b11d1bd17e9754486273"
+  };
+
+  try { firebase.initializeApp(firebaseConfig); } catch(e) {}
+
+  let currentDoctorToken = null;
+
+  function dismissAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function loginDoctor() {
+    const email = document.getElementById('auth-email').value;
+    const pass = document.getElementById('auth-password').value;
+    const errEl = document.getElementById('auth-err');
+    const btn = document.getElementById('auth-btn');
+    errEl.style.display = 'none';
+    btn.textContent = 'Signing in...';
+    btn.disabled = true;
+
+    firebase.auth().signInWithEmailAndPassword(email, pass)
+      .then(async (userCredential) => {
+        currentDoctorToken = await userCredential.user.getIdToken();
+        dismissAuthModal();
+        console.log("Logged in as:", userCredential.user.email);
+      })
+      .catch((err) => {
+        errEl.textContent = err.message;
+        errEl.style.display = 'block';
+        btn.textContent = 'Sign In';
+        btn.disabled = false;
+      });
+  }
+
+  // On page load: check if user is already authenticated; if not, show login form
+  // Give Firebase 2s to resolve persisted session before showing the form
+  const _authCheckTimeout = setTimeout(() => {
+    // Firebase took too long — show the form so user isn't stuck on spinner
+    document.getElementById('auth-checking').style.display = 'none';
+    document.getElementById('auth-form').style.display = 'block';
+  }, 2000);
+
+  try {
+    firebase.auth().onAuthStateChanged(async (user) => {
+      clearTimeout(_authCheckTimeout);
+      if (user) {
+        currentDoctorToken = await user.getIdToken();
+        dismissAuthModal();
+        console.log("Session restored for:", user.email);
+      } else {
+        // Not signed in — show login form
+        document.getElementById('auth-checking').style.display = 'none';
+        document.getElementById('auth-form').style.display = 'block';
+      }
+    });
+  } catch(e) {
+    // Firebase failed to initialise (e.g. no internet for SDK) — just dismiss
+    clearTimeout(_authCheckTimeout);
+    dismissAuthModal();
+  }
+</script>
+
 <body>
   <div id="app">
     <!-- Header -->

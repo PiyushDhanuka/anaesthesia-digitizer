@@ -1,4 +1,5 @@
 import io
+from contextlib import asynccontextmanager
 import os
 import re
 import socket
@@ -43,12 +44,9 @@ def get_lan_ip() -> str:
     except Exception:
         return "127.0.0.1"
 
-_last_valid_ocr = {}
-
-app = FastAPI()
-
-@app.on_event("startup")
-def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
     init_db()
     lan_ip = get_lan_ip()
     port = 8000
@@ -60,8 +58,14 @@ def startup_event():
     if lan_ip and lan_ip != "127.0.0.1":
         print(f" Mobile/iPad:   http://{lan_ip}:{port}/app/dashboard.html")
     else:
-        print(" Mobile/iPad:   (No active LAN IP detected — Localhost only)")
+        print(" Mobile/iPad:   (No active LAN IP detected - Localhost only)")
     print("==================================================\n")
+    yield
+    # Shutdown (nothing to clean up currently)
+
+_last_valid_ocr = {}
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -70,6 +74,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_no_cache_header(request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 capture_app_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "capture-app"))
 simulator_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "simulator", "brand-a"))

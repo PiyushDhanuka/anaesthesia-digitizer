@@ -225,3 +225,41 @@ HANDOVER.md
 tests/
 scratch/
 *.mp4
+
+# ==========================================
+# Project-specific secrets and deployment
+# ==========================================
+
+# Firebase service-account credentials
+backend/firebase_key.json
+**/firebase_key.json
+**/*serviceAccount*.json
+**/*service-account*.json
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+secrets/
+credentials.json
+
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Runtime logs and temporary files
+*.log
