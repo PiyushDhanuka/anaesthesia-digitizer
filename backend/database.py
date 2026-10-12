@@ -3,20 +3,23 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
+import json
+import os
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# --- FIREBASE INITIALIZATION ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-cred_path = os.path.join(current_dir, "firebase_key.json")
-
 if not firebase_admin._apps:
-    cred = credentials.Certificate(cred_path)
+    service_account_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+
+    if service_account_json:
+        cred = credentials.Certificate(json.loads(service_account_json))
+    else:
+        cred_path = os.path.join(os.path.dirname(__file__), "firebase_key.json")
+        cred = credentials.Certificate(cred_path)
+
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
-print("[DB] Running 100% on Firebase Firestore")
-
 
 def init_db():
     """No-op for NoSQL. Kept so main.py doesn't crash on import."""
